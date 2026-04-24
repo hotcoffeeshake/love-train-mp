@@ -1,0 +1,102 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f5f5f7;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 32rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
+}
+
+.user {
+  display: flex;
+  align-items: center;
+}
+
+.avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  margin-right: 16rpx;
+  background: #f0f0f0;
+}
+
+.avatar-default {
+  text-align: center;
+  line-height: 64rpx;
+  font-size: 32rpx;
+  color: #999;
+}
+
+.nickname {
+  font-size: 30rpx;
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.more {
+  padding: 0 20rpx;
+  font-size: 40rpx;
+  color: #888;
+  letter-spacing: -4rpx;
+}
+
+.list {
+  flex: 1;
+  overflow: hidden;
+}
+
+.empty {
+  text-align: center;
+  color: #888;
+  padding: 120rpx 32rpx;
+  font-size: 28rpx;
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 32rpx;
+  background: #fff;
+  border-top: 1rpx solid #eee;
+}
+
+.input {
+  flex: 1;
+  height: 80rpx;
+  padding: 0 28rpx;
+  background: #f5f5f7;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+}
+
+.send {
+  min-width: 140rpx;
+  height: 80rpx !important;
+  line-height: 80rpx !important;
+  padding: 0 32rpx;
+  font-size: 28rpx !important;
+}
+
+.clear-wrap {
+  position: absolute;
+  right: 32rpx;
+  bottom: 160rpx;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+}

@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "love-train",
+  "usingComponents": {
+    "quota-badge": "/components/quota-badge/quota-badge",
+    "message-bubble": "/components/message-bubble/message-bubble"
+  }
+}

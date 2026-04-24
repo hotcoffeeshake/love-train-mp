@@ -1,0 +1,53 @@
+<view class="page">
+  <view class="header">
+    <view class="user">
+      <image class="avatar" wx:if="{{user.avatarUrl}}" src="{{user.avatarUrl}}" />
+      <view class="avatar avatar-default" wx:else>♡</view>
+      <view class="nickname">{{user.nickname || '兄弟'}}</view>
+    </view>
+    <view class="header-right">
+      <quota-badge remaining="{{user.remainingUses}}" limit="10" />
+      <view class="more" bindtap="onAbout">···</view>
+    </view>
+  </view>
+
+  <scroll-view
+    class="list"
+    scroll-y
+    scroll-into-view="{{scrollToId}}"
+    scroll-with-animation>
+    <view wx:if="{{messages.length === 0}}" class="empty">
+      兄弟，你遇到什么情况了？发给我看看
+    </view>
+    <message-bubble
+      wx:for="{{messages}}"
+      wx:key="id"
+      id="{{item.id}}"
+      role="{{item.role}}"
+      content="{{item.content}}"
+      loading="{{item.pending}}"
+    />
+  </scroll-view>
+
+  <view class="composer safe-bottom">
+    <input
+      class="input"
+      placeholder="{{quotaExhausted ? '今日 10 次已用完' : '说点什么...'}}"
+      value="{{draft}}"
+      disabled="{{quotaExhausted}}"
+      confirm-type="send"
+      bindinput="onInput"
+      bindconfirm="onSend" />
+    <button
+      class="btn-primary send"
+      disabled="{{sending || !draft.length || quotaExhausted}}"
+      loading="{{sending}}"
+      bindtap="onSend">
+      发送
+    </button>
+  </view>
+
+  <view class="clear-wrap" bindtap="onClearHistory" wx:if="{{messages.length > 0}}">
+    清空聊天
+  </view>
+</view>

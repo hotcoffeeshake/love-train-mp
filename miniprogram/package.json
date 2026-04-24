@@ -1,0 +1,15 @@
+{
+  "name": "love-train-mp-miniprogram",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run -c test/vitest.config.ts",
+    "test:watch": "vitest -c test/vitest.config.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "miniprogram-api-typings": "^3.12.0",
+    "vitest": "^1.5.0"
+  }
+}

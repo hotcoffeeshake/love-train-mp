@@ -42,7 +42,7 @@ export async function callBackend<T>(
   method: 'GET' | 'POST',
   data?: unknown,
 ): Promise<T> {
-  let res: WechatMiniprogram.Cloud.CallContainerResult;
+  let res: ICloud.CallContainerResult;
   try {
     res = await wx.cloud.callContainer({
       path,

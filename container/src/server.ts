@@ -1,6 +1,6 @@
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import { loadConfig } from './config.js';
 import { connectMongo } from './db/mongo.js';
 import { createProvider } from './llm/index.js';
@@ -30,7 +30,7 @@ async function main() {
   await app.register(rateLimit, {
     max: 60,
     timeWindow: '1 minute',
-    keyGenerator: (req) => (req.headers['x-wx-openid'] as string) || req.ip,
+    keyGenerator: (req: FastifyRequest) => (req.headers['x-wx-openid'] as string) || req.ip,
   });
   await app.register(openidPlugin);
 

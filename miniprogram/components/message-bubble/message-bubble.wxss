@@ -1,0 +1,47 @@
+.row {
+  display: flex;
+  margin: 16rpx 32rpx;
+}
+
+.row-user {
+  justify-content: flex-end;
+}
+
+.row-assistant {
+  justify-content: flex-start;
+}
+
+.bubble {
+  max-width: 72%;
+  padding: 20rpx 28rpx;
+  border-radius: 28rpx;
+  font-size: 30rpx;
+  line-height: 1.55;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.bubble-user {
+  background: #111;
+  color: #fff;
+  border-bottom-right-radius: 6rpx;
+}
+
+.bubble-assistant {
+  background: #fff;
+  color: #1c1c1e;
+  border-bottom-left-radius: 6rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.caret {
+  display: inline-block;
+  margin-left: 4rpx;
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}

@@ -1,0 +1,6 @@
+<view class="row row-{{role}}">
+  <view class="bubble bubble-{{role}}">
+    <text class="text">{{content}}</text>
+    <text wx:if="{{loading}}" class="caret">▍</text>
+  </view>
+</view>

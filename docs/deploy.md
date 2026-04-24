@@ -12,15 +12,27 @@
 
 云托管控制台 -> 服务 -> 设置 -> 环境变量：
 
+**默认方案（推荐）：CloudBase 内置 AI，零密钥**
+
 | Key | Value |
 |---|---|
 | `NODE_ENV` | `production` |
-| `LLM_PROVIDER` | `deepseek` |
-| `LLM_API_KEY` | <你的 DeepSeek key> |
+| `LLM_PROVIDER` | `cloudbase-hunyuan` |
+| `CLOUDBASE_ENV_ID` | <你的云开发环境 ID> |
 | `DAILY_QUOTA` | `10` |
 | `WX_APPID` | <你的 AppID> |
 | `MONGODB_URI` | <云开发 MongoDB 连接串，控制台自动提供> |
 | `MONGODB_DB` | `love-train-mp` |
+
+云托管内**不需要 TENCENT_SECRET_ID / SECRET_KEY**，微信服务自动鉴权。
+
+**可选 provider 值**：
+- `cloudbase-hunyuan`（默认，走混元 `hunyuan-2.0-instruct-20251111`）
+- `cloudbase-deepseek`（走 `deepseek-v3.2`）
+- `deepseek`（外网 DeepSeek，需 `LLM_API_KEY`，跨境延迟高）
+- `claude` / `hunyuan`（M4 再实现）
+
+**本地开发**（非云托管环境）：额外配 `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY`。
 
 ### 2. 部署代码
 

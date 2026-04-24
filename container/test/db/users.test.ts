@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { __resetDbForTest, __setDbForTest } from '../../src/db/mongo.js';
+import { MongoAdapter } from '../../src/db/mongo-adapter.js';
 import { getOrCreateUser, incrementTotalUses, updateProfile } from '../../src/db/users.js';
 
 let mongod: MongoMemoryServer;
@@ -11,7 +12,7 @@ beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
   client = new MongoClient(mongod.getUri());
   await client.connect();
-  __setDbForTest(client.db('test'));
+  __setDbForTest(new MongoAdapter(client.db('test')));
 });
 
 afterAll(async () => {

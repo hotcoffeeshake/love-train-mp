@@ -21,12 +21,12 @@ export async function getOrCreateUser(openid: string, unionid?: string): Promise
   if (existing) {
     await col.updateOne({ openid }, { $set: { lastActiveAt: now } });
     return {
-      openid: existing.openid,
-      unionid: existing.unionid,
-      nickname: existing.nickname,
-      avatarUrl: existing.avatarUrl,
-      totalUses: existing.totalUses ?? 0,
-      createdAt: existing.createdAt,
+      openid: existing.openid as string,
+      unionid: existing.unionid as string | undefined,
+      nickname: existing.nickname as string | undefined,
+      avatarUrl: existing.avatarUrl as string | undefined,
+      totalUses: (existing.totalUses as number | undefined) ?? 0,
+      createdAt: (existing.createdAt as Date | undefined) ?? now,
       lastActiveAt: now,
       isNewUser: false,
     };

@@ -2,7 +2,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { loadConfig } from './config.js';
-import { connectMongo } from './db/mongo.js';
+import { connectCloudBase, connectMongo } from './db/mongo.js';
 import { createProvider } from './llm/index.js';
 import { openidPlugin } from './middleware/openid.js';
 import { authRoutes } from './routes/auth.js';
@@ -20,11 +20,17 @@ async function main() {
     bodyLimit: 5 * 1024 * 1024,
   });
 
-  const mongoUri = process.env.MONGODB_URI;
-  if (!mongoUri) {
-    throw new Error('MONGODB_URI required (M1 本地 + 云托管都传)');
+  if (cfg.cloudbaseEnvId) {
+    connectCloudBase(cfg.cloudbaseEnvId);
+    app.log.info(`DB: CloudBase NoSQL (env=${cfg.cloudbaseEnvId})`);
+  } else {
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+      throw new Error('Either CLOUDBASE_ENV_ID or MONGODB_URI must be set');
+    }
+    await connectMongo(mongoUri, process.env.MONGODB_DB ?? 'love-train-mp');
+    app.log.info(`DB: MongoDB (${mongoUri})`);
   }
-  await connectMongo(mongoUri, process.env.MONGODB_DB ?? 'love-train-mp');
 
   await app.register(cors, { origin: true });
   await app.register(rateLimit, {

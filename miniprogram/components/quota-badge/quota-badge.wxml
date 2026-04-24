@@ -1,0 +1,1 @@
+<view class="badge">今日 {{remaining}}/{{limit}}</view>

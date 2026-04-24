@@ -1,0 +1,27 @@
+<view class="container">
+  <view class="hero">
+    <view class="logo">♡</view>
+    <view class="title">love-train</view>
+    <view class="subtitle">童锦程风格 · 情感导师 AI</view>
+  </view>
+
+  <view class="form">
+    <button
+      class="btn-primary"
+      disabled="{{!agreed || loading}}"
+      loading="{{loading}}"
+      bindtap="onLogin">
+      {{loading ? '登录中...' : '微信一键登录'}}
+    </button>
+
+    <view wx:if="{{errorMsg}}" class="error">{{errorMsg}}</view>
+
+    <view class="agree" bindtap="onToggleAgree">
+      <view class="checkbox {{agreed ? 'on' : ''}}">{{agreed ? '✓' : ''}}</view>
+      <view class="agree-text">
+        我已阅读并同意
+        <text class="link" catchtap="onAbout">《用户协议》《隐私协议》</text>
+      </view>
+    </view>
+  </view>
+</view>

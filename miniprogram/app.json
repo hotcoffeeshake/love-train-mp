@@ -1,0 +1,13 @@
+{
+  "pages": ["pages/login/login", "pages/chat/chat", "pages/about/about"],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "love-train",
+    "navigationBarTextStyle": "black"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "cloud": true
+}

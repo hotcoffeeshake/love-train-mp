@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="section">
+    <view class="title">love-train</view>
+    <view class="version">v{{version}}</view>
+    <view class="desc">童锦程风格的情感导师 AI。兄弟，你遇到什么情况都可以聊。</view>
+  </view>
+
+  <view class="section">
+    <view class="heading">用户协议</view>
+    <view class="p">本应用为情感沟通辅助工具，AI 生成内容仅供参考，不构成专业咨询意见。使用本应用需遵守微信小程序平台规范。</view>
+  </view>
+
+  <view class="section">
+    <view class="heading">隐私协议</view>
+    <view class="p">我们仅收集登录后的 openid、昵称、头像用于识别身份；聊天内容保存在你本地，不上传服务器。AI 调用请求会临时传给模型服务，不用于训练。</view>
+  </view>
+
+  <view class="section">
+    <view class="heading">联系我们</view>
+    <view class="p">反馈请发邮件到 joshxieavalon@gmail.com</view>
+  </view>
+</view>

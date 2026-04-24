@@ -1,0 +1,30 @@
+{
+  "name": "love-train-mp-container",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "fastify": "^4.28.0",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "wx-server-sdk": "^2.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "mongodb-memory-server": "^9.1.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.5.0"
+  }
+}

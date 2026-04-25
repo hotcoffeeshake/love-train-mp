@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { AppConfig } from '../config.js';
 import { getUsage, incrementUsage } from '../db/quota.js';
 import { getOrCreateUser, incrementTotalUses } from '../db/users.js';
+import { stripMarkdown } from '../llm/strip-markdown.js';
 import type { ChatMessage, LLMProvider } from '../llm/types.js';
 import { ocrImageBase64 } from '../ocr/tencent-ocr.js';
 import { checkImage, checkText } from '../security/wechat-security.js';
@@ -100,13 +101,13 @@ async function streamingHandler(
   const tLLM = Date.now();
   try {
     if (llm.chatStream) {
-      full = await llm.chatStream(messages, (delta) => {
-        reply.raw.write(ndjson({ type: 'delta', text: delta }));
-      });
+      // 全部攒齐再清 markdown 一次性发，避免跨 chunk 的 ** 标记切断
+      full = await llm.chatStream(messages, () => {});
     } else {
       full = await llm.chat(messages);
-      reply.raw.write(ndjson({ type: 'delta', text: full }));
     }
+    full = stripMarkdown(full);
+    reply.raw.write(ndjson({ type: 'delta', text: full }));
     console.log(`[chat] llm done ms=${Date.now() - tLLM} chars=${full.length}`);
   } catch (err) {
     console.error('[chat] llm failed', err);
@@ -169,9 +170,9 @@ export const chatRoutes =
         }
         const safe = await checkText(cfg.cloudbaseEnvId, req.openid, content);
         if (!safe.ok) {
-          // 不阻断回复，但截断
           content = '回复内容被审核拦截，请换个角度问问';
         }
+        content = stripMarkdown(content);
         await commit();
         return { content, remainingUses: remainingAfter };
       }

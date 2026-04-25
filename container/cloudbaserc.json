@@ -1,29 +1,6 @@
 {
-  "version": "2.0",
   "envId": "cool123-d0gec5og96116475f",
-  "$schema": "https://framework-1258016615.tcloudbaseapp.com/schema/latest.json",
   "cloudrun": {
-    "love-train-mp": {
-      "type": "container",
-      "path": "./",
-      "port": 3000,
-      "cpu": 1,
-      "mem": 2,
-      "minNum": 0,
-      "maxNum": 1,
-      "hasDockerfile": true,
-      "dockerfile": "Dockerfile",
-      "buildDir": ".",
-      "envParams": {
-        "NODE_ENV": "production",
-        "LLM_PROVIDER": "cloudbase-hunyuan",
-        "CLOUDBASE_ENV_ID": "cool123-d0gec5og96116475f",
-        "WX_APPID": "wxd33f35dec128e040",
-        "DAILY_QUOTA": "10",
-        "PORT": "3000",
-        "TZ": "Asia/Shanghai"
-      }
-    },
     "name": "love-train-mp3"
   }
 }

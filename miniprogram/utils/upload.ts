@@ -1,10 +1,11 @@
 // 图片选择 + 压缩 + 上传到云存储
 
 const MAX_IMAGES = 5;
-const COMPRESS_THRESHOLD_KB = 200; // 大于 200KB 就压缩
-const COMPRESS_QUALITY = 50; // 质量 50，文件小很多但视觉 OK
-const RECOMPRESS_QUALITY = 30; // 还是太大就再压一轮
-const HARD_TARGET_KB = 500; // 单图目标 ≤ 500KB
+// 注意：聊天截图内的文字若被过度压缩，OCR 识别率会暴跌。
+// chooseMedia({ sizeType: ['compressed'] }) 已经做了一轮系统级压缩，
+// 我们这里只在体积仍然过大时再轻度压一轮，质量保留 80。
+const COMPRESS_THRESHOLD_KB = 1500; // 1.5MB 以下保持原图
+const COMPRESS_QUALITY = 80;
 
 export interface PickedImage {
   tempPath: string;
@@ -52,12 +53,7 @@ async function compressOnce(src: string, quality: number): Promise<string> {
 
 async function maybeCompress(img: PickedImage): Promise<string> {
   if (img.size < COMPRESS_THRESHOLD_KB * 1024) return img.tempPath;
-  let path = await compressOnce(img.tempPath, COMPRESS_QUALITY);
-  let size = await getFileSize(path);
-  if (size > HARD_TARGET_KB * 1024) {
-    path = await compressOnce(path, RECOMPRESS_QUALITY);
-  }
-  return path;
+  return compressOnce(img.tempPath, COMPRESS_QUALITY);
 }
 
 function pad2(n: number): string {

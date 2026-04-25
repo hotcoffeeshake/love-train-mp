@@ -43,13 +43,21 @@ export async function ocrDebug(base64: string): Promise<OcrDebugResult> {
   let basicRaw: unknown = null;
   let text = '';
   try {
-    accurateRaw = await client.GeneralAccurateOCR({ ImageBase64: base64 });
-    const items = (accurateRaw as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
-    text = items.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean).join('\n');
-    if (!text) {
+    try {
       basicRaw = await client.GeneralBasicOCR({ ImageBase64: base64, LanguageType: 'zh' });
-      const items2 = (basicRaw as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
-      text = items2.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean).join('\n');
+      const items = (basicRaw as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
+      text = items.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean).join('\n');
+    } catch (e) {
+      basicRaw = { errorMessage: (e as Error)?.message };
+    }
+    if (!text) {
+      try {
+        accurateRaw = await client.GeneralAccurateOCR({ ImageBase64: base64 });
+        const items = (accurateRaw as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
+        text = items.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean).join('\n');
+      } catch (e) {
+        accurateRaw = { errorMessage: (e as Error)?.message };
+      }
     }
     return { text, accurateRaw, basicRaw, error: null, hasClient: true };
   } catch (err) {
@@ -73,28 +81,26 @@ export async function ocrImageBase64(base64: string): Promise<string> {
     console.warn('[ocr] no credentials, skipping');
     return '';
   }
+  // 先试 Basic（多数账号默认就开免费额度）；返回空再试 Accurate（要单独开通）。
+  // 任一调用抛错也不阻塞主链路。
   try {
-    // GeneralAccurateOCR 高精度版本：对深色背景、复杂排版（如聊天截图）识别更稳。
-    const res = await client.GeneralAccurateOCR({
-      ImageBase64: base64,
-    });
-    console.log('[ocr] accurate raw:', JSON.stringify(res).slice(0, 800));
-    const items = (res as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
-    const lines = items
-      .map((it) => (it.DetectedText ?? '').trim())
-      .filter((s) => s.length > 0);
-    if (lines.length > 0) return lines.join('\n');
-
-    // 兜底：高精度返回空时再尝试一次基础版
-    const fallback = await client.GeneralBasicOCR({
+    const basic = await client.GeneralBasicOCR({
       ImageBase64: base64,
       LanguageType: 'zh',
     });
-    console.log('[ocr] basic raw:', JSON.stringify(fallback).slice(0, 800));
-    const items2 = (fallback as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
-    return items2.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean).join('\n');
+    const items = (basic as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
+    const lines = items.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean);
+    if (lines.length > 0) return lines.join('\n');
   } catch (err) {
-    console.error('[ocr] OCR failed:', err);
+    console.warn('[ocr] basic failed, trying accurate:', (err as Error)?.message);
+  }
+
+  try {
+    const accurate = await client.GeneralAccurateOCR({ ImageBase64: base64 });
+    const items = (accurate as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
+    return items.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean).join('\n');
+  } catch (err) {
+    console.error('[ocr] accurate failed:', (err as Error)?.message);
     return '';
   }
 }

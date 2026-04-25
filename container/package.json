@@ -23,6 +23,7 @@
     "mongodb": "^6.5.0",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
+    "tencentcloud-sdk-nodejs-ocr": "^4.1.218",
     "wx-server-sdk": "^2.6.5"
   },
   "devDependencies": {

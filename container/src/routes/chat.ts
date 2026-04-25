@@ -3,6 +3,7 @@ import type { AppConfig } from '../config.js';
 import { getUsage, incrementUsage } from '../db/quota.js';
 import { getOrCreateUser, incrementTotalUses } from '../db/users.js';
 import type { ChatMessage, LLMProvider } from '../llm/types.js';
+import { ocrImageBase64 } from '../ocr/tencent-ocr.js';
 import { checkImage, checkText } from '../security/wechat-security.js';
 import { downloadFileAsBase64 } from '../storage/cos.js';
 import { SYSTEM_PROMPT } from '../system-prompt.js';
@@ -44,8 +45,10 @@ async function buildLLMMessages(
   const out: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }];
   for (const m of msgs) {
     if (m.fileIDs && m.fileIDs.length > 0 && m.role === 'user') {
-      const imageDescriptions: string[] = [];
+      const imageBlocks: string[] = [];
+      let idx = 0;
       for (const fid of m.fileIDs.slice(0, 5)) {
+        idx += 1;
         const tImg = Date.now();
         try {
           const dl = await downloadFileAsBase64(cfg.cloudbaseEnvId, fid);
@@ -54,13 +57,20 @@ async function buildLLMMessages(
           if (!safe.ok) {
             return { ok: false, code: 'UNSAFE_IMAGE', message: '图片不合规，请换一张' };
           }
-          imageDescriptions.push('[用户附了一张图片]');
+          const tOcr = Date.now();
+          const text = await ocrImageBase64(dl.base64);
+          log.info({ ms: Date.now() - tOcr, chars: text.length }, '[chat] ocr done');
+          if (text) {
+            imageBlocks.push(`[图片${idx} OCR 文字]\n${text}`);
+          } else {
+            imageBlocks.push(`[图片${idx}：无可识别文字（可能是纯图、人脸或表情）]`);
+          }
         } catch (err) {
-          log.error({ err, fid: fid.slice(0, 60) }, '[chat] image download failed');
-          imageDescriptions.push('[用户附了图片但下载失败]');
+          log.error({ err, fid: fid.slice(0, 60) }, '[chat] image processing failed');
+          imageBlocks.push(`[图片${idx}：处理失败]`);
         }
       }
-      const combined = m.content + (imageDescriptions.length ? '\n' + imageDescriptions.join('\n') : '');
+      const combined = m.content + (imageBlocks.length ? '\n\n' + imageBlocks.join('\n\n') : '');
       out.push({ role: 'user', content: combined });
     } else {
       out.push({ role: m.role, content: m.content });

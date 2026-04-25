@@ -1,0 +1,8 @@
+{
+  "version": "2.0",
+  "envId": "cool123-d0gec5og96116475f",
+  "$schema": "https://framework-1258016615.tcloudbaseapp.com/schema/latest.json",
+  "cloudrun": {
+    "name": "love-train-mp3"
+  }
+}

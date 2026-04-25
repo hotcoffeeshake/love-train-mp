@@ -142,10 +142,25 @@ export function chatStream(
         cb.onError(data.error ?? `HTTP_${res.statusCode}`, data.message ?? '请求失败');
         return;
       }
-      const data = res.data as { content?: string; remainingUses?: number };
-      if (data && typeof data.content === 'string') {
-        cb.onDelta(data.content);
-        cb.onDone(typeof data.remainingUses === 'number' ? data.remainingUses : 0);
+
+      // 兜底：当基础库不真正走 chunked，data 会是完整字符串（NDJSON）或对象
+      const raw = res.data as unknown;
+      if (typeof raw === 'string') {
+        // 整段 NDJSON：按行解析
+        const lines = raw.split('\n');
+        for (const line of lines) handleChunk(line);
+        return;
+      }
+      if (raw && typeof raw === 'object') {
+        const obj = raw as { content?: string; remainingUses?: number; error?: string; message?: string };
+        if (typeof obj.content === 'string') {
+          cb.onDelta(obj.content);
+          cb.onDone(typeof obj.remainingUses === 'number' ? obj.remainingUses : 0);
+          return;
+        }
+        if (obj.error) {
+          cb.onError(obj.error, obj.message ?? 'unknown error');
+        }
       }
     },
     fail: (err: { errMsg?: string }) => {

@@ -1,0 +1,9 @@
+miniprogram/
+docs/
+.vscode/
+.idea/
+.mcp-tmp/
+config/
+M3-PROGRESS.md
+*.log
+.DS_Store

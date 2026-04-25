@@ -7,6 +7,7 @@ import { createProvider } from './llm/index.js';
 import { openidPlugin } from './middleware/openid.js';
 import { authRoutes } from './routes/auth.js';
 import { chatRoutes } from './routes/chat.js';
+import { debugRoutes } from './routes/debug.js';
 import { healthRoutes } from './routes/health.js';
 import { userRoutes } from './routes/user.js';
 
@@ -46,6 +47,7 @@ async function main() {
   await app.register(authRoutes(cfg));
   await app.register(userRoutes(cfg));
   await app.register(chatRoutes(cfg, llm));
+  await app.register(debugRoutes(cfg));
 
   await app.listen({ port: cfg.port, host: '0.0.0.0' });
   app.log.info(`love-train-mp listening on ${cfg.port}, provider=${cfg.llm.provider}`);

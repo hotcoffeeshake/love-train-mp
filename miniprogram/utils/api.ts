@@ -134,7 +134,8 @@ export function chatStream(
       'content-type': 'application/json',
     },
     data: { messages, stream: true },
-    enableChunked: true,
+    // 注：wx.cloud.callContainer 在多数基础库版本下不真正走 chunked 流式，
+    // 这里关掉 enableChunked，让框架等收完整段 NDJSON 一次性回调，避免渲染卡死。
     timeout: 60000,
     success: (res: ICloud.CallContainerResult) => {
       if (aborted) return;
@@ -144,12 +145,32 @@ export function chatStream(
         return;
       }
 
-      // 兜底：当基础库不真正走 chunked，data 会是完整字符串（NDJSON）或对象
+      // 兜底：当基础库不真正走 chunked，data 会是完整字符串（NDJSON）或对象。
+      // 把所有 delta 合并成一次回调，避免连续 setData 卡死渲染。
       const raw = res.data as unknown;
       if (typeof raw === 'string') {
-        // 整段 NDJSON：按行解析
+        let merged = '';
+        let remaining = 0;
+        let errorCode: string | null = null;
+        let errorMsg = '';
         const lines = raw.split('\n');
-        for (const line of lines) handleChunk(line);
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const o = JSON.parse(trimmed) as ChatChunk;
+            if (o.type === 'delta') merged += o.text;
+            else if (o.type === 'done') remaining = o.remainingUses;
+            else if (o.type === 'warning') cb.onWarning?.(o.message);
+            else if (o.type === 'error') { errorCode = o.code; errorMsg = o.message; }
+          } catch { /* ignore */ }
+        }
+        if (errorCode) {
+          cb.onError(errorCode, errorMsg);
+          return;
+        }
+        if (merged) cb.onDelta(merged);
+        cb.onDone(remaining);
         return;
       }
       if (raw && typeof raw === 'object') {

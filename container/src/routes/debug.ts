@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { AppConfig } from '../config.js';
-import { ocrImageBase64 } from '../ocr/tencent-ocr.js';
+import { ocrDebug, ocrImageBase64 } from '../ocr/tencent-ocr.js';
 import { downloadFileAsBase64 } from '../storage/cos.js';
 
 interface DebugBody {
@@ -19,6 +19,17 @@ export const debugRoutes = (cfg: AppConfig): FastifyPluginAsync => async (app) =
     llmProvider: cfg.llm.provider,
     llmModel: cfg.llm.model,
   }));
+
+  app.post<{ Body: DebugBody }>('/debug/ocr-raw', async (req, reply) => {
+    if (!req.body?.fileID) return reply.code(400).send({ error: 'fileID required' });
+    try {
+      const dl = await downloadFileAsBase64(cfg.cloudbaseEnvId, req.body.fileID);
+      const debug = await ocrDebug(dl.base64);
+      return { sizeKB: Math.round(dl.base64.length / 1024), ...debug };
+    } catch (err) {
+      return reply.code(500).send({ error: 'fail', message: (err as Error)?.message });
+    }
+  });
 
   app.post<{ Body: DebugBody }>('/debug/ocr', async (req, reply) => {
     if (!req.body?.fileID) {

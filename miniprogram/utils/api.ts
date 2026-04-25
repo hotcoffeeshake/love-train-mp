@@ -135,6 +135,7 @@ export function chatStream(
     },
     data: { messages, stream: true },
     enableChunked: true,
+    timeout: 60000,
     success: (res: ICloud.CallContainerResult) => {
       if (aborted) return;
       if (res.statusCode >= 400) {

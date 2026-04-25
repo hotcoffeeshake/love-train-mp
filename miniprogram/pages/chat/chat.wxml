@@ -3,7 +3,7 @@
     <view class="user">
       <image class="avatar" wx:if="{{user.avatarUrl}}" src="{{user.avatarUrl}}" />
       <view class="avatar avatar-default" wx:else>♡</view>
-      <view class="nickname">{{user.nickname || '兄弟'}}</view>
+      <view class="nickname">{{user.nickname || '我'}}</view>
     </view>
     <view class="header-right">
       <quota-badge remaining="{{user.remainingUses}}" limit="10" />
@@ -26,10 +26,23 @@
       role="{{item.role}}"
       content="{{item.content}}"
       loading="{{item.pending}}"
+      fileIDs="{{item.fileIDs || []}}"
     />
   </scroll-view>
 
+  <view wx:if="{{pendingFileIDs.length > 0}}" class="pending-images">
+    <view wx:for="{{pendingFileIDs}}" wx:key="*this" class="pending-thumb">
+      <image src="{{item}}" mode="aspectFill" class="pending-img" />
+      <view class="remove" data-idx="{{index}}" bindtap="onRemoveImage">×</view>
+    </view>
+  </view>
+
   <view class="composer safe-bottom">
+    <view
+      class="add-btn {{uploadingImages ? 'add-btn-loading' : ''}}"
+      bindtap="onPickImages">
+      {{uploadingImages ? '...' : '+'}}
+    </view>
     <input
       class="input"
       placeholder="{{quotaExhausted ? '今日 10 次已用完' : '说点什么...'}}"
@@ -40,7 +53,7 @@
       bindconfirm="onSend" />
     <button
       class="btn-primary send"
-      disabled="{{sending || !draft.length || quotaExhausted}}"
+      disabled="{{sending || (!draft.length && pendingFileIDs.length === 0) || quotaExhausted}}"
       loading="{{sending}}"
       bindtap="onSend">
       发送

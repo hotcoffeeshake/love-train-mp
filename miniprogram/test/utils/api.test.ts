@@ -17,7 +17,7 @@ describe('callBackend', () => {
     const call = (globalThis as any).wx.cloud.callContainer.mock.calls[0][0];
     expect(call.path).toBe('/health');
     expect(call.method).toBe('GET');
-    expect(call.header['X-WX-SERVICE']).toBe('love-train-mp');
+    expect(call.header['X-WX-SERVICE']).toBe('love-train-mp3');
   });
 
   it('throws BackendError with code on non-200', async () => {

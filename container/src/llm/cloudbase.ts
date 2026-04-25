@@ -1,5 +1,5 @@
 import tcb from '@cloudbase/node-sdk';
-import type { ChatMessage, LLMProvider } from './types.js';
+import type { ChatMessage, LLMProvider, StreamChunkHandler } from './types.js';
 
 export type CloudBaseProviderName = 'hunyuan-exp' | 'deepseek';
 
@@ -32,9 +32,21 @@ export class CloudBaseProvider implements LLMProvider {
   async chat(messages: ChatMessage[]): Promise<string> {
     const result = await this.model.generateText({
       model: this.cfg.model,
-      // ChatMessage shape matches cloudbase simple message types; assistant variants with tool_calls aren't used here
       messages: messages as never,
     });
     return result.text;
+  }
+
+  async chatStream(messages: ChatMessage[], onDelta: StreamChunkHandler): Promise<string> {
+    const res = await this.model.streamText({
+      model: this.cfg.model,
+      messages: messages as never,
+    });
+    let full = '';
+    for await (const text of res.textStream) {
+      full += text;
+      onDelta(text);
+    }
+    return full;
   }
 }

@@ -100,3 +100,56 @@
   border-radius: 999rpx;
   font-size: 24rpx;
 }
+
+.add-btn {
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  text-align: center;
+  border: 2rpx solid #ccc;
+  border-radius: 50%;
+  font-size: 36rpx;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.add-btn-loading {
+  color: #999;
+  font-size: 22rpx;
+}
+
+.pending-images {
+  display: flex;
+  gap: 12rpx;
+  padding: 12rpx 32rpx;
+  background: #fff;
+  border-top: 1rpx solid #eee;
+  flex-wrap: wrap;
+}
+
+.pending-thumb {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+}
+
+.pending-img {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  background: #f0f0f0;
+}
+
+.remove {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 36rpx;
+  height: 36rpx;
+  line-height: 32rpx;
+  text-align: center;
+  background: #111;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 24rpx;
+}

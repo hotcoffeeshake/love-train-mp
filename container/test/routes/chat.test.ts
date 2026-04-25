@@ -57,7 +57,7 @@ describe('POST /chat', () => {
       method: 'POST',
       url: '/chat',
       headers: { 'x-wx-openid': 'oA' },
-      payload: { messages: [{ role: 'user', content: '她不回我' }] },
+      payload: { messages: [{ role: 'user', content: '她不回我' }], stream: false },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ content: '兄弟你稳住', remainingUses: 9 });
@@ -70,7 +70,7 @@ describe('POST /chat', () => {
       method: 'POST',
       url: '/chat',
       headers: { 'x-wx-openid': 'oA' },
-      payload: { messages: [{ role: 'user', content: 'hi' }] },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
     });
     expect(llm.lastMessages[0].role).toBe('system');
   });
@@ -89,7 +89,7 @@ describe('POST /chat', () => {
       method: 'POST',
       url: '/chat',
       headers: { 'x-wx-openid': 'oA' },
-      payload: { messages: [{ role: 'user', content: 'hi' }] },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
     });
     expect(res.statusCode).toBe(429);
   });
@@ -104,7 +104,7 @@ describe('POST /chat', () => {
       method: 'POST',
       url: '/chat',
       headers: { 'x-wx-openid': 'oA' },
-      payload: { messages: [{ role: 'user', content: 'hi' }] },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
     });
     expect(res.statusCode).toBe(500);
 

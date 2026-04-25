@@ -45,3 +45,17 @@
     opacity: 0;
   }
 }
+
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-bottom: 12rpx;
+}
+
+.thumb {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.1);
+}

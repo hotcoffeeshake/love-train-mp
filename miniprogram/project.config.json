@@ -2,13 +2,32 @@
   "description": "love-train-mp miniprogram",
   "packOptions": {
     "ignore": [
-      { "type": "folder", "value": "test" },
-      { "type": "folder", "value": "typings" },
-      { "type": "file", "value": "tsconfig.json" },
-      { "type": "file", "value": "package.json" },
-      { "type": "file", "value": "package-lock.json" },
-      { "type": "folder", "value": "node_modules" }
-    ]
+      {
+        "value": "test",
+        "type": "folder"
+      },
+      {
+        "value": "typings",
+        "type": "folder"
+      },
+      {
+        "value": "tsconfig.json",
+        "type": "file"
+      },
+      {
+        "value": "package.json",
+        "type": "file"
+      },
+      {
+        "value": "package-lock.json",
+        "type": "file"
+      },
+      {
+        "value": "node_modules",
+        "type": "folder"
+      }
+    ],
+    "include": []
   },
   "setting": {
     "urlCheck": true,
@@ -44,7 +63,15 @@
     "minifyWXSS": true,
     "showES6CompileOption": false,
     "minifyWXML": true,
-    "useCompilerPlugins": ["typescript"]
+    "useCompilerPlugins": [
+      "typescript"
+    ],
+    "compileWorklet": false,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
   "compileType": "miniprogram",
   "libVersion": "3.3.0",
@@ -52,6 +79,10 @@
   "projectname": "love-train-mp",
   "cloudbaseRoot": "",
   "cloudfunctionTemplateRoot": "",
-  "editorSetting": { "tabIndent": "insertSpaces", "tabSize": 2 },
-  "condition": {}
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  },
+  "condition": {},
+  "simulatorPluginLibVersion": {}
 }

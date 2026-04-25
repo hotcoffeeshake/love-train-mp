@@ -1,6 +1,16 @@
 <view class="row row-{{role}}">
   <view class="bubble bubble-{{role}}">
-    <text class="text">{{content}}</text>
+    <view wx:if="{{fileIDs.length > 0}}" class="images">
+      <image
+        wx:for="{{fileIDs}}"
+        wx:key="*this"
+        class="thumb"
+        mode="aspectFill"
+        src="{{item}}"
+        data-idx="{{index}}"
+        bindtap="onPreview" />
+    </view>
+    <text wx:if="{{content}}" class="text">{{content}}</text>
     <text wx:if="{{loading}}" class="caret">▍</text>
   </view>
 </view>

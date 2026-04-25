@@ -1,8 +1,10 @@
 // 图片选择 + 压缩 + 上传到云存储
 
 const MAX_IMAGES = 5;
-const COMPRESS_THRESHOLD_KB = 1024; // 大于 1MB 时压缩
-const COMPRESS_QUALITY = 80;
+const COMPRESS_THRESHOLD_KB = 200; // 大于 200KB 就压缩
+const COMPRESS_QUALITY = 50; // 质量 50，文件小很多但视觉 OK
+const RECOMPRESS_QUALITY = 30; // 还是太大就再压一轮
+const HARD_TARGET_KB = 500; // 单图目标 ≤ 500KB
 
 export interface PickedImage {
   tempPath: string;
@@ -24,14 +26,38 @@ export async function pickImages(currentCount: number): Promise<PickedImage[]> {
   return res.tempFiles.map((f) => ({ tempPath: f.tempFilePath, size: f.size }));
 }
 
-async function maybeCompress(img: PickedImage): Promise<string> {
-  if (img.size < COMPRESS_THRESHOLD_KB * 1024) return img.tempPath;
+function getFileSize(path: string): Promise<number> {
+  return new Promise((resolve) => {
+    try {
+      const fs = wx.getFileSystemManager();
+      fs.getFileInfo({
+        filePath: path,
+        success: (r: { size: number }) => resolve(r.size),
+        fail: () => resolve(0),
+      });
+    } catch {
+      resolve(0);
+    }
+  });
+}
+
+async function compressOnce(src: string, quality: number): Promise<string> {
   try {
-    const r = await wx.compressImage({ src: img.tempPath, quality: COMPRESS_QUALITY });
+    const r = await wx.compressImage({ src, quality });
     return r.tempFilePath;
   } catch {
-    return img.tempPath;
+    return src;
   }
+}
+
+async function maybeCompress(img: PickedImage): Promise<string> {
+  if (img.size < COMPRESS_THRESHOLD_KB * 1024) return img.tempPath;
+  let path = await compressOnce(img.tempPath, COMPRESS_QUALITY);
+  let size = await getFileSize(path);
+  if (size > HARD_TARGET_KB * 1024) {
+    path = await compressOnce(path, RECOMPRESS_QUALITY);
+  }
+  return path;
 }
 
 function pad2(n: number): string {

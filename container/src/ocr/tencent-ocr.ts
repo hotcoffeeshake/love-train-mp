@@ -36,17 +36,25 @@ export async function ocrImageBase64(base64: string): Promise<string> {
     return '';
   }
   try {
-    const res = await client.GeneralBasicOCR({
+    // GeneralAccurateOCR 高精度版本：对深色背景、复杂排版（如聊天截图）识别更稳。
+    const res = await client.GeneralAccurateOCR({
       ImageBase64: base64,
-      LanguageType: 'zh',
     });
     const items = (res as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
     const lines = items
       .map((it) => (it.DetectedText ?? '').trim())
       .filter((s) => s.length > 0);
-    return lines.join('\n');
+    if (lines.length > 0) return lines.join('\n');
+
+    // 兜底：高精度返回空时再尝试一次基础版（成本低，宽松）
+    const fallback = await client.GeneralBasicOCR({
+      ImageBase64: base64,
+      LanguageType: 'zh',
+    });
+    const items2 = (fallback as { TextDetections?: { DetectedText?: string }[] }).TextDetections ?? [];
+    return items2.map((it) => (it.DetectedText ?? '').trim()).filter(Boolean).join('\n');
   } catch (err) {
-    console.error('[ocr] GeneralBasicOCR failed:', err);
+    console.error('[ocr] OCR failed:', err);
     return '';
   }
 }

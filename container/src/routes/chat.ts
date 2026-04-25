@@ -27,12 +27,16 @@ async function buildLLMMessages(
   cfg: AppConfig,
   msgs: IncomingChatMessage[],
   openid: string,
-  log: { error: (...args: unknown[]) => void },
+  log: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void },
 ): Promise<{ ok: true; messages: ChatMessage[] } | { ok: false; code: string; message: string }> {
+  const t0 = Date.now();
+  log.info({ openid: openid.slice(0, 8), msgCount: msgs.length }, '[chat] build start');
+
   // 内容安全：用户最新消息文本（仅最后一条 user）
   const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
   if (lastUser) {
     const r = await checkText(cfg.cloudbaseEnvId, openid, lastUser.content);
+    log.info({ ms: Date.now() - t0, ok: r.ok }, '[chat] text safe');
     if (!r.ok) return { ok: false, code: 'UNSAFE_CONTENT', message: '消息含敏感内容，换个说法试试' };
   }
 
@@ -42,16 +46,17 @@ async function buildLLMMessages(
     if (m.fileIDs && m.fileIDs.length > 0 && m.role === 'user') {
       const imageDescriptions: string[] = [];
       for (const fid of m.fileIDs.slice(0, 5)) {
+        const tImg = Date.now();
         try {
           const dl = await downloadFileAsBase64(cfg.cloudbaseEnvId, fid);
+          log.info({ ms: Date.now() - tImg, sizeKB: Math.round(dl.base64.length / 1024) }, '[chat] image downloaded');
           const safe = await checkImage(cfg.cloudbaseEnvId, openid, dl.base64);
           if (!safe.ok) {
             return { ok: false, code: 'UNSAFE_IMAGE', message: '图片不合规，请换一张' };
           }
-          // 当前 cloudbase AI 文本模型不直接吃 base64 图片，转成简短描述提示词
           imageDescriptions.push('[用户附了一张图片]');
         } catch (err) {
-          log.error('image download failed', err);
+          log.error({ err, fid: fid.slice(0, 60) }, '[chat] image download failed');
           imageDescriptions.push('[用户附了图片但下载失败]');
         }
       }
@@ -61,6 +66,7 @@ async function buildLLMMessages(
       out.push({ role: m.role, content: m.content });
     }
   }
+  log.info({ totalMs: Date.now() - t0 }, '[chat] build done');
   return { ok: true, messages: out };
 }
 
@@ -81,6 +87,7 @@ async function streamingHandler(
   });
 
   let full = '';
+  const tLLM = Date.now();
   try {
     if (llm.chatStream) {
       full = await llm.chatStream(messages, (delta) => {
@@ -90,7 +97,9 @@ async function streamingHandler(
       full = await llm.chat(messages);
       reply.raw.write(ndjson({ type: 'delta', text: full }));
     }
+    console.log(`[chat] llm done ms=${Date.now() - tLLM} chars=${full.length}`);
   } catch (err) {
+    console.error('[chat] llm failed', err);
     reply.raw.write(ndjson({ type: 'error', code: 'LLM_FAIL', message: 'AI 响应失败，请重试' }));
     reply.raw.end();
     return;
@@ -128,6 +137,7 @@ export const chatRoutes =
         });
       }
 
+      req.log.info({ openid: req.openid.slice(0, 8), stream: body.stream !== false }, '[chat] req in');
       const built = await buildLLMMessages(cfg, body.messages, req.openid, req.log);
       if (!built.ok) {
         return reply.code(400).send({ error: built.code, message: built.message });

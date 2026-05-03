@@ -43,7 +43,14 @@ export async function getOrCreateUser(openid: string, unionid?: string): Promise
   const existing = await col.findOne({ openid });
 
   if (existing) {
-    await col.updateOne({ openid }, { $set: { lastActiveAt: now } });
+    // Backfill: 老用户在 T2 之前注册，DB 里没有 invite_code，按需生成一个
+    let inviteCode = existing.invite_code as string | undefined;
+    const set: Record<string, unknown> = { lastActiveAt: now };
+    if (!inviteCode) {
+      inviteCode = await generateUniqueInviteCode();
+      set.invite_code = inviteCode;
+    }
+    await col.updateOne({ openid }, { $set: set });
     return {
       openid: existing.openid as string,
       unionid: existing.unionid as string | undefined,
@@ -53,7 +60,7 @@ export async function getOrCreateUser(openid: string, unionid?: string): Promise
       createdAt: (existing.createdAt as Date | undefined) ?? now,
       lastActiveAt: now,
       isNewUser: false,
-      invite_code: existing.invite_code as string,
+      invite_code: inviteCode,
       inviter_openid: existing.inviter_openid as string | undefined,
       invited_at: existing.invited_at as Date | undefined,
       bonus_balance: (existing.bonus_balance as number | undefined) ?? 0,

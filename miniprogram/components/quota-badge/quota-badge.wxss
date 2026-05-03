@@ -7,3 +7,12 @@
   font-size: 24rpx;
   line-height: 1.5;
 }
+
+.bonus {
+  margin-left: 8rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: rgba(231, 111, 81, 0.15);
+  color: #e76f51;
+  font-size: 22rpx;
+}

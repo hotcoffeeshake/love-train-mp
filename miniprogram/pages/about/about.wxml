@@ -5,6 +5,27 @@
     <view class="desc">童锦程风格的情感导师 AI。兄弟，你遇到什么情况都可以聊。</view>
   </view>
 
+  <!-- 会员状态 -->
+  <view class="member-card" wx:if="{{user}}">
+    <view wx:if="{{user.is_paid}}">
+      <view class="m-title">付费会员 · 每日 {{user.today_limit}} 次</view>
+      <view class="m-meta">有效期至 {{expireText}}</view>
+      <button class="m-btn ghost" bindtap="onSubscribe" loading="{{paying}}">续费 ¥20/月</button>
+    </view>
+    <view wx:else>
+      <view class="m-title">免费会员 · 每日 {{user.today_limit}} 次</view>
+      <view class="m-meta">付费版每日 30 次 · 免广告</view>
+      <button class="m-btn primary" bindtap="onSubscribe" loading="{{paying}}">开通付费版 ¥20/月</button>
+    </view>
+  </view>
+
+  <!-- 邀请好友 -->
+  <view class="invite-card" wx:if="{{user}}">
+    <view class="i-title">邀请好友 · 双方各 +5 次免费查询</view>
+    <view class="i-code">我的邀请码 <text>{{user.invite_code}}</text></view>
+    <view class="i-hint">点击右上角 ··· 转发给朋友，对方登录后自动绑定</view>
+  </view>
+
   <view class="section">
     <view class="heading">用户协议</view>
     <view class="p">本应用为情感沟通辅助工具，AI 生成内容仅供参考，不构成专业咨询意见。使用本应用需遵守微信小程序平台规范。</view>

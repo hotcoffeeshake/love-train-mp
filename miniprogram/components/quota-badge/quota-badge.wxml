@@ -1,1 +1,4 @@
-<view class="badge">今日 {{remaining}}/{{limit}}</view>
+<view class="badge">
+  <text>今日 {{remaining}}/{{limit}}</text>
+  <text wx:if="{{bonus > 0}}" class="bonus">＋奖励 {{bonus}}</text>
+</view>

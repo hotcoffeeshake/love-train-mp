@@ -26,6 +26,9 @@ Page({
     scrollToId: '',
     pendingFileIDs: [] as string[],
     uploadingImages: false,
+    remaining: 0,
+    limit: 10,
+    bonus: 0,
   },
 
   onLoad() {
@@ -44,16 +47,25 @@ Page({
       draft: loadDraft(),
       quotaExhausted: user.remainingUses <= 0,
       scrollToId: history.length ? `h-${history.length - 1}` : '',
+      remaining: user.remainingUses,
+      limit: user.today_limit ?? 10,
+      bonus: user.bonus_balance ?? 0,
     });
   },
 
   async onShow() {
     if (!app.globalData.user) return;
     try {
-      const q = await api.quota();
-      const user = { ...app.globalData.user, remainingUses: q.remainingUses };
-      app.setUser(user);
-      this.setData({ user, quotaExhausted: q.remainingUses <= 0 });
+      // 拉取最新 /auth/me，刷新 remaining / bonus / today_limit（含付费态变更）
+      const fresh = await api.me();
+      app.setUser(fresh);
+      this.setData({
+        user: fresh,
+        quotaExhausted: fresh.remainingUses <= 0,
+        remaining: fresh.remainingUses,
+        limit: fresh.today_limit ?? 10,
+        bonus: fresh.bonus_balance ?? 0,
+      });
     } catch {
       // 静默失败：保留老值
     }
@@ -149,7 +161,7 @@ Page({
       onWarning: (msg) => {
         wx.showToast({ title: msg, icon: 'none' });
       },
-      onDone: (remainingUses) => {
+      onDone: async (remainingUses) => {
         const finalText = accumulated || '...';
         this.updateAiMessage(aiId, finalText, false);
         appendHistory(user.openid, { role: 'assistant', content: finalText });
@@ -159,7 +171,21 @@ Page({
           sending: false,
           user: updatedUser,
           quotaExhausted: remainingUses <= 0,
+          remaining: remainingUses,
         });
+        // chatStream 的 done 只回传当日 remaining，bonus 可能也被消耗了，
+        // 重新拉一次 /auth/me 同步 bonus_balance / today_limit / 付费态。
+        try {
+          const fresh = await api.me();
+          app.setUser(fresh);
+          this.setData({
+            user: fresh,
+            bonus: fresh.bonus_balance ?? 0,
+            limit: fresh.today_limit ?? 10,
+          });
+        } catch {
+          /* ignore refresh failure */
+        }
       },
       onError: (code, message) => {
         let errText = '网络开小差，再试一次';

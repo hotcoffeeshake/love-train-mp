@@ -6,7 +6,7 @@
       <view class="nickname">{{user.nickname || '我'}}</view>
     </view>
     <view class="header-right">
-      <quota-badge remaining="{{user.remainingUses}}" limit="10" />
+      <quota-badge remaining="{{remaining}}" limit="{{limit}}" bonus="{{bonus}}" />
       <view class="more" bindtap="onAbout">···</view>
     </view>
   </view>

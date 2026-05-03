@@ -1,6 +1,7 @@
 export type LLMProviderName =
   | 'cloudbase-hunyuan'
   | 'cloudbase-deepseek'
+  | 'cloudbase-deepseek-custom'
   | 'deepseek'
   | 'hunyuan'
   | 'claude';
@@ -39,6 +40,7 @@ export interface AppConfig {
 const VALID_PROVIDERS: LLMProviderName[] = [
   'cloudbase-hunyuan',
   'cloudbase-deepseek',
+  'cloudbase-deepseek-custom',
   'deepseek',
   'hunyuan',
   'claude',
@@ -61,6 +63,7 @@ export function loadConfig(): AppConfig {
   const defaults: Record<LLMProviderName, { url: string; model: string }> = {
     'cloudbase-hunyuan': { url: '', model: 'hunyuan-2.0-instruct-20251111' },
     'cloudbase-deepseek': { url: '', model: 'deepseek-v3.2' },
+    'cloudbase-deepseek-custom': { url: '', model: 'deepseek-chat' },
     deepseek: { url: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-chat' },
     hunyuan: { url: 'https://api.hunyuan.cloud.tencent.com/v1/chat/completions', model: 'hunyuan-turbos-latest' },
     claude: { url: 'https://api.anthropic.com/v1/messages', model: 'claude-sonnet-4-20250514' },

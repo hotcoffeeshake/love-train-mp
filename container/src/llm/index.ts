@@ -27,6 +27,18 @@ export function createProvider(cfg: AppConfig): LLMProvider {
         secretId: process.env.TENCENT_SECRET_ID,
         secretKey: process.env.TENCENT_SECRET_KEY,
       });
+    case 'cloudbase-deepseek-custom':
+      if (!cfg.cloudbaseEnvId) {
+        throw new Error('CLOUDBASE_ENV_ID required for cloudbase-deepseek-custom');
+      }
+      return new CloudBaseProvider({
+        envId: cfg.cloudbaseEnvId,
+        // 用户在 CloudBase 控制台自建的模型厂商，名字必须和控制台里一致
+        providerName: 'deepseek-open-custom',
+        model: cfg.llm.model,
+        secretId: process.env.TENCENT_SECRET_ID,
+        secretKey: process.env.TENCENT_SECRET_KEY,
+      });
     case 'deepseek':
       return new DeepSeekProvider(cfg.llm);
     case 'hunyuan':

@@ -1,5 +1,5 @@
 import tcb from '@cloudbase/node-sdk';
-import type { Database, DbCollection, DbDocument, UpdateOptions, UpdateSpec } from './adapter.js';
+import type { Database, DbCollection, DbDocument, FindOptions, UpdateOptions, UpdateSpec } from './adapter.js';
 
 type TcbDatabase = ReturnType<ReturnType<typeof tcb.init>['database']>;
 
@@ -10,6 +10,20 @@ class CloudBaseCollection implements DbCollection {
     const r = await this.db.collection(this.name).where(filter).limit(1).get();
     const arr = (r as { data: DbDocument[] }).data;
     return arr.length > 0 ? arr[0] : null;
+  }
+
+  async find(filter: DbDocument, options?: FindOptions): Promise<DbDocument[]> {
+    let q = this.db.collection(this.name).where(filter) as unknown as {
+      orderBy(field: string, dir: 'asc' | 'desc'): typeof q;
+      skip(n: number): typeof q;
+      limit(n: number): typeof q;
+      get(): Promise<{ data: DbDocument[] }>;
+    };
+    if (options?.sortBy) q = q.orderBy(options.sortBy, options.sortDir ?? 'desc');
+    if (options?.offset) q = q.skip(options.offset);
+    if (options?.limit) q = q.limit(options.limit);
+    const r = await q.get();
+    return (r.data ?? []) as DbDocument[];
   }
 
   async insertOne(doc: DbDocument): Promise<void> {

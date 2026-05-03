@@ -1,5 +1,5 @@
 import type { Db } from 'mongodb';
-import type { Database, DbCollection, DbDocument, UpdateOptions, UpdateSpec } from './adapter.js';
+import type { Database, DbCollection, DbDocument, FindOptions, UpdateOptions, UpdateSpec } from './adapter.js';
 
 class MongoCollection implements DbCollection {
   constructor(private readonly db: Db, private readonly name: string) {}
@@ -7,6 +7,17 @@ class MongoCollection implements DbCollection {
   async findOne(filter: DbDocument): Promise<DbDocument | null> {
     const doc = await this.db.collection(this.name).findOne(filter);
     return (doc as DbDocument | null) ?? null;
+  }
+
+  async find(filter: DbDocument, options?: FindOptions): Promise<DbDocument[]> {
+    let cursor = this.db.collection(this.name).find(filter);
+    if (options?.sortBy) {
+      cursor = cursor.sort({ [options.sortBy]: options.sortDir === 'asc' ? 1 : -1 });
+    }
+    if (options?.offset) cursor = cursor.skip(options.offset);
+    if (options?.limit) cursor = cursor.limit(options.limit);
+    const docs = await cursor.toArray();
+    return docs as DbDocument[];
   }
 
   async insertOne(doc: DbDocument): Promise<void> {

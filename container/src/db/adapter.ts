@@ -10,8 +10,16 @@ export interface UpdateOptions {
   upsert?: boolean;
 }
 
+export interface FindOptions {
+  limit?: number;
+  offset?: number;
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
+}
+
 export interface DbCollection {
   findOne(filter: DbDocument): Promise<DbDocument | null>;
+  find(filter: DbDocument, options?: FindOptions): Promise<DbDocument[]>;
   insertOne(doc: DbDocument): Promise<void>;
   updateOne(filter: DbDocument, update: UpdateSpec, options?: UpdateOptions): Promise<void>;
   deleteMany(filter: DbDocument): Promise<void>;

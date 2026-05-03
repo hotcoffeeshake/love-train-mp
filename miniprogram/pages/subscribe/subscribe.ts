@@ -2,10 +2,14 @@ import { api, type UserInfo } from '../../utils/api';
 
 const app = getApp<IAppOption>();
 
+/**
+ * 当前阶段：微信支付商户号未到位，付费走"联系运营手动开通"。
+ * 用户在此页能拿到自己的开通码（= invite_code），告诉运营 + 转账后运营 curl /admin/grant-paid
+ * 开通。这版 UI 不调 api.createOrder（mock 升级会让所有用户白嫖）。
+ */
 Page({
   data: {
     user: null as UserInfo | null,
-    paying: false,
     expireText: '',
     freeLimit: 10,
     paidLimit: 30,
@@ -22,57 +26,44 @@ Page({
           ? new Date(user.paid_until).toLocaleDateString('zh-CN')
           : '',
       });
-    } catch (err: any) {
-      wx.showToast({ title: err?.message ?? '加载失败', icon: 'none' });
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message ?? '加载失败';
+      wx.showToast({ title: msg, icon: 'none' });
     }
   },
 
-  async onSubscribe() {
-    if (this.data.paying) return;
-    this.setData({ paying: true });
-    try {
-      const r = await api.createOrder({ months: 1 });
-      if (r.mode === 'mock') {
-        wx.showModal({
-          title: '已模拟开通付费（测试模式）',
-          content: `有效期至 ${new Date(r.paid_until).toLocaleDateString('zh-CN')}\n\n生产环境上线后将走真实微信支付。`,
-          showCancel: false,
-        });
-        await this.onShow();
-      } else {
-        wx.requestPayment({
-          ...r.wx_payment,
-          success: async () => {
-            wx.showToast({ title: '支付成功，处理中…', icon: 'none' });
-            for (let i = 0; i < 5; i += 1) {
-              await new Promise((res) => setTimeout(res, 1500));
-              try {
-                const fresh = await api.me();
-                if (fresh.is_paid) {
-                  app.setUser(fresh);
-                  this.setData({
-                    user: fresh,
-                    expireText: fresh.paid_until
-                      ? new Date(fresh.paid_until).toLocaleDateString('zh-CN')
-                      : '',
-                  });
-                  wx.showToast({ title: '开通成功', icon: 'success' });
-                  break;
-                }
-              } catch {
-                /* ignore */
-              }
-            }
-          },
-          fail: () => {
-            wx.showToast({ title: '已取消支付', icon: 'none' });
-          },
-        });
-      }
-    } catch (err: any) {
-      wx.showToast({ title: err?.message ?? '下单失败', icon: 'none' });
-    } finally {
-      this.setData({ paying: false });
+  onSubscribe() {
+    const code = this.data.user?.invite_code;
+    const paid = this.data.user?.is_paid;
+    if (!code) {
+      wx.showToast({ title: '请重新登录后再试', icon: 'none' });
+      return;
     }
+    wx.showModal({
+      title: paid ? '续费' : '即将上线',
+      content: paid
+        ? `微信联系 UnheardBili 续费\n你的开通码：${code}\n转账后 24h 内手动续期。`
+        : `微信支付正在接入，期间联系运营手动开通：\n\n1. 微信联系 UnheardBili\n2. 告知开通码：${code}\n3. 转账 ¥20 → 24h 内开通`,
+      confirmText: '复制开通码',
+      cancelText: '关闭',
+      confirmColor: '#1f1f1c',
+      success: (r) => {
+        if (r.confirm) this.copyCode();
+      },
+    });
+  },
+
+  onCopyCode() {
+    this.copyCode();
+  },
+
+  copyCode() {
+    const code = this.data.user?.invite_code;
+    if (!code) return;
+    wx.setClipboardData({
+      data: code,
+      success: () =>
+        wx.showToast({ title: `开通码 ${code} 已复制`, icon: 'none' }),
+    });
   },
 });

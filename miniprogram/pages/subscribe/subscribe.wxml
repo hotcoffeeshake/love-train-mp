@@ -42,13 +42,22 @@
   <!-- Member valid-until note (paid only) -->
   <view class="paid-meta" wx:if="{{user.is_paid && user.paid_until}}">有效期至 {{expireText}}</view>
 
+  <!-- 你的开通码（manual 阶段用，让用户告诉运营来匹配） -->
+  <view class="manual-code-wrap" wx:if="{{!user.is_paid && user.invite_code}}">
+    <view class="manual-code-label">你的开通码</view>
+    <view class="manual-code" bindtap="onCopyCode">
+      <text class="code-chars">{{user.invite_code}}</text>
+      <text class="copy-hint">点击复制</text>
+    </view>
+  </view>
+
   <!-- CTA -->
   <view class="cta-wrap">
-    <button class="cta" bindtap="onSubscribe" loading="{{paying}}">
-      {{user.is_paid ? '续费 ¥' + priceYuan + '/月' : '开通付费版 ¥' + priceYuan + '/月'}}
+    <button class="cta" bindtap="onSubscribe">
+      {{user.is_paid ? '续费 · 联系 UnheardBili' : '即将上线 · 联系 UnheardBili 手动开通'}}
     </button>
     <view class="agreement">
-      点击即代表同意<text class="link">《会员服务协议》</text>
+      正在接入微信支付 · 期间联系运营手动开通
     </view>
   </view>
 </view>

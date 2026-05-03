@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import type { AppConfig } from '../config.js';
 import { findUserByInviteCode, getOrCreateUser } from '../db/users.js';
@@ -8,6 +9,7 @@ import {
   type RebateStatus,
 } from '../db/subscriptions.js';
 import { getDb } from '../db/mongo.js';
+import { recordPayment } from '../services/payment.js';
 
 export const adminRoutes =
   (_cfg: AppConfig): FastifyPluginAsync =>
@@ -81,4 +83,49 @@ export const adminRoutes =
       ok: true,
       now: new Date().toISOString(),
     }));
+
+    /**
+     * 手动开通付费（运营线下收款后调用）
+     * body: { invite_code: 'A8K2P9' }  或  { openid: 'oXxx' }
+     *       + months?: number (默认 1)
+     *       + amount?: number (单位分，默认 cfg.subscription.amountCents)
+     *       + payment_ref?: string (微信转账备注，用于审计)
+     */
+    app.post<{
+      Body: {
+        invite_code?: string;
+        openid?: string;
+        months?: number;
+        amount?: number;
+        payment_ref?: string;
+      };
+    }>('/admin/grant-paid', async (req, reply) => {
+      const body = req.body ?? {};
+      let user = null;
+      if (body.invite_code) user = await findUserByInviteCode(body.invite_code);
+      else if (body.openid) user = await getOrCreateUser(body.openid);
+      if (!user) {
+        reply.code(404);
+        return { ok: false, error: 'USER_NOT_FOUND' };
+      }
+      const months = Math.max(1, Math.min(12, body.months ?? 1));
+      const amount = body.amount ?? _cfg.subscription.amountCents;
+      const txnId = `manual-${randomUUID().slice(0, 12)}`;
+      const r = await recordPayment(_cfg, {
+        openid: user.openid,
+        amount,
+        transaction_id: txnId,
+        out_trade_no: txnId,
+        source: 'manual',
+        months,
+      });
+      return {
+        ok: true,
+        subscription_id: r.subscription_id,
+        paid_until: r.paid_until.toISOString(),
+        rebate_status: r.rebate_status,
+        opened_for: { openid: user.openid, invite_code: user.invite_code },
+        payment_ref: body.payment_ref ?? null,
+      };
+    });
   };

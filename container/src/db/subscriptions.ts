@@ -4,7 +4,7 @@ import { getDb } from './mongo.js';
 const COLLECTION = 'subscriptions';
 
 export type RebateStatus = 'none' | 'pending' | 'paid';
-export type SubscriptionSource = 'wxpay' | 'mock';
+export type SubscriptionSource = 'wxpay' | 'mock' | 'manual';
 
 export interface SubscriptionInput {
   openid: string;

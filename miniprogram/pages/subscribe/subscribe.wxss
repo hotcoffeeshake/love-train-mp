@@ -123,6 +123,41 @@
   padding: 16rpx 32rpx 0;
 }
 
+/* 开通码 块（manual 阶段） */
+.manual-code-wrap {
+  margin: 32rpx 32rpx 0;
+  padding: 28rpx 32rpx;
+  background: #efe9dd;
+  border: 1rpx solid #e2dccc;
+  border-radius: 16rpx;
+  text-align: center;
+}
+.manual-code-label {
+  font-size: 22rpx;
+  color: #5d5b56;
+  letter-spacing: 1rpx;
+  margin-bottom: 12rpx;
+}
+.manual-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.code-chars {
+  font-family: 'Menlo', 'Roboto Mono', monospace;
+  font-size: 44rpx;
+  letter-spacing: 8rpx;
+  color: #cc785c;
+  font-weight: 600;
+  padding: 8rpx 24rpx;
+  background: rgba(204, 120, 92, 0.12);
+  border-radius: 12rpx;
+}
+.copy-hint {
+  font-size: 22rpx;
+  color: #5d5b56;
+}
+
 /* CTA */
 .cta-wrap {
   padding: 48rpx 48rpx 32rpx;

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>love-train · admin</title>
+<style>
+  :root {
+    --bg: #f7f3ec; --ink: #2a2a2a; --accent: #e76f51; --wine: #8b3a3a;
+    --line: rgba(0,0,0,0.12); --muted: #6b6b6b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, "PingFang SC", system-ui, sans-serif; }
+  header { padding: 24px 28px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 16px; }
+  h1 { margin: 0; font-style: italic; font-family: Georgia, serif; font-weight: 400; }
+  .token-row { padding: 16px 28px; display: flex; gap: 8px; border-bottom: 1px solid var(--line); }
+  .token-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px; background: white; font: inherit; }
+  .token-row button, .row button, .form button { padding: 8px 14px; background: var(--accent); color: white; border: none; border-radius: 4px; font: inherit; cursor: pointer; }
+  .row button.ghost, .form button.ghost { background: transparent; color: var(--wine); border: 1px solid var(--wine); }
+  nav.tabs { display: flex; padding: 0 28px; border-bottom: 1px solid var(--line); }
+  nav.tabs a { padding: 12px 16px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+  nav.tabs a.active { color: var(--ink); border-bottom-color: var(--accent); }
+  main { padding: 24px 28px; }
+  .card { background: white; padding: 16px 20px; border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--line); }
+  .card .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .src-mock { display: inline-block; padding: 1px 6px; background: var(--wine); color: white; border-radius: 3px; font-size: 11px; }
+  .src-wxpay { display: inline-block; padding: 1px 6px; background: var(--accent); color: white; border-radius: 3px; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .form { display: flex; flex-direction: column; gap: 8px; max-width: 480px; }
+  .form input, .form textarea { padding: 8px 12px; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+  dialog { border: 1px solid var(--line); border-radius: 8px; padding: 20px; max-width: 480px; }
+  dialog::backdrop { background: rgba(0,0,0,0.4); }
+</style>
+</head>
+<body>
+<header>
+  <h1>love-train · admin</h1>
+  <span class="meta" id="status">未登录</span>
+</header>
+<div class="token-row">
+  <input id="token" placeholder="X-Admin-Token" />
+  <button onclick="saveToken()">保存</button>
+</div>
+<nav class="tabs">
+  <a data-tab="pending" class="active">待返点</a>
+  <a data-tab="paid">已返点</a>
+  <a data-tab="all">全部订阅</a>
+  <a data-tab="users">用户查询</a>
+</nav>
+<main id="view"></main>
+
+<dialog id="markDialog">
+  <form method="dialog" class="form" onsubmit="return submitMark(event)">
+    <h3 style="margin:0">标记已发返点</h3>
+    <textarea id="rebateNote" rows="3" placeholder="¥6.6 微信转账 5月10日..."></textarea>
+    <div class="row" style="display:flex; gap:8px;">
+      <button type="button" class="ghost" onclick="document.getElementById('markDialog').close()">取消</button>
+      <button type="submit">确定</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const view = document.getElementById('view');
+let activeTab = 'pending';
+let pendingMarkId = null;
+
+function saveToken() {
+  const t = $('#token').value.trim();
+  localStorage.setItem('lt_admin_token', t);
+  $('#status').textContent = t ? 'token 已保存' : '未登录';
+  render();
+}
+
+function getToken() {
+  return localStorage.getItem('lt_admin_token') || '';
+}
+
+async function api(path, opts = {}) {
+  const t = getToken();
+  if (!t) return null;
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'X-Admin-Token': t, 'content-type': 'application/json', ...(opts.headers || {}) },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(`API ${res.status}: ${err.error || res.statusText}`);
+    return null;
+  }
+  return res.json();
+}
+
+document.querySelectorAll('nav.tabs a').forEach(a => a.addEventListener('click', () => {
+  document.querySelectorAll('nav.tabs a').forEach(x => x.classList.remove('active'));
+  a.classList.add('active');
+  activeTab = a.dataset.tab;
+  render();
+}));
+
+async function render() {
+  const t = getToken();
+  if (!t) { view.innerHTML = '<p class="meta">请先在上方输入 token 并保存</p>'; return; }
+  if (activeTab === 'pending') return renderRebates('pending');
+  if (activeTab === 'paid') return renderRebates('paid');
+  if (activeTab === 'all') return renderAll();
+  if (activeTab === 'users') return renderUsers();
+}
+
+async function renderRebates(status) {
+  const data = await api('/admin/rebates?status=' + status);
+  if (!data) return;
+  if (data.length === 0) { view.innerHTML = `<p class="meta">没有 ${status} 订阅</p>`; return; }
+  view.innerHTML = data.map(s => `
+    <div class="card">
+      <div class="row">
+        <div>
+          <div><b>${s.paid_user.openid.slice(0, 12)}…</b> (${s.paid_user.invite_code}) · ¥${(s.amount/100).toFixed(2)} · <span class="src-${s.source}">${s.source}</span></div>
+          <div class="meta">上级 ${s.inviter ? s.inviter.openid.slice(0,12) + '… (' + s.inviter.invite_code + ')' : '无'} · 付款 ${new Date(s.paid_user.paid_at).toLocaleString('zh-CN')}</div>
+          ${s.rebate_paid_at ? `<div class="meta">已发：${s.rebate_note} (${new Date(s.rebate_paid_at).toLocaleString('zh-CN')})</div>` : ''}
+        </div>
+        ${status === 'pending' ? `<button onclick="openMark('${s.subscription_id}')">标记已发</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function renderAll() {
+  const data = await api('/admin/subscriptions?limit=100');
+  if (!data) return;
+  view.innerHTML = `<table>
+    <thead><tr><th>付款时间</th><th>付费人</th><th>上级</th><th>金额</th><th>来源</th><th>返点</th></tr></thead>
+    <tbody>${data.map(s => `<tr>
+      <td>${new Date(s.paid_at).toLocaleString('zh-CN')}</td>
+      <td>${s.openid.slice(0,12)}…</td>
+      <td>${s.inviter_openid ? s.inviter_openid.slice(0,12) + '…' : '-'}</td>
+      <td>¥${(s.amount/100).toFixed(2)}</td>
+      <td><span class="src-${s.source}">${s.source}</span></td>
+      <td>${s.rebate_status}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+async function renderUsers() {
+  view.innerHTML = `
+    <div class="form">
+      <input id="q" placeholder="邀请码 (e.g. A8K2P9) 或 openid" />
+      <button onclick="findUser()">查询</button>
+      <div id="userResult"></div>
+    </div>`;
+}
+
+async function findUser() {
+  const q = $('#q').value.trim();
+  if (!q) return;
+  const isCode = /^[A-Z0-9]{6}$/.test(q);
+  const data = await api('/admin/users?' + (isCode ? `invite_code=${q}` : `openid=${q}`));
+  if (!data) return;
+  $('#userResult').innerHTML = `
+    <div class="card">
+      <div><b>${data.user.openid}</b> · 邀请码 ${data.user.invite_code} · 奖励余 ${data.user.bonus_balance} · 付费至 ${data.user.paid_until ?? '无'}</div>
+    </div>
+    <h3>邀请了 ${data.referrals.length} 人</h3>
+    ${data.referrals.map(r => `<div class="card meta">${r.openid} · ${r.invited_at ? new Date(r.invited_at).toLocaleString('zh-CN') : ''}</div>`).join('')}`;
+}
+
+function openMark(id) {
+  pendingMarkId = id;
+  $('#rebateNote').value = '';
+  $('#markDialog').showModal();
+}
+
+async function submitMark(e) {
+  e.preventDefault();
+  const note = $('#rebateNote').value.trim();
+  if (!pendingMarkId) return false;
+  const r = await api(`/admin/rebates/${pendingMarkId}/mark-paid`, {
+    method: 'POST', body: JSON.stringify({ rebate_note: note }),
+  });
+  if (r) { $('#markDialog').close(); render(); }
+  return false;
+}
+
+// init
+$('#token').value = getToken();
+$('#status').textContent = getToken() ? 'token 已加载' : '未登录';
+render();
+</script>
+</body>
+</html>

@@ -1,5 +1,8 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { loadConfig } from './config.js';
 import { connectCloudBase, connectMongo } from './db/mongo.js';
@@ -51,6 +54,13 @@ async function main() {
     await connectMongo(mongoUri, process.env.MONGODB_DB ?? 'love-train-mp');
     app.log.info(`DB: MongoDB (${mongoUri})`);
   }
+
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  await app.register(fastifyStatic, {
+    root: path.join(__dirname, '..', 'public'),
+    prefix: `/admin/${cfg.admin.uiPathSegment}/`,
+    decorateReply: false,
+  });
 
   await app.register(cors, { origin: true });
   await app.register(rateLimit, {

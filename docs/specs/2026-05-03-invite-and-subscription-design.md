@@ -1,134 +1,165 @@
-# love-train 小程序 · 邀请关系 + 配额奖励 + 付费返点 设计
+# love-train 小程序 · 邀请关系 + 配额奖励 + 付费 + 返点 设计（v2）
 
-> 状态：草案 · 日期 2026-05-03 · 关联 [`docs/handoff.md`](../handoff.md)
-
----
-
-## 1. 背景与目标
-
-当前小程序已具备：登录、流式聊天、OCR、配额（10/日）、内容审核降级。
-
-本次新增三件强相关的事：
-
-1. **邀请关系**：用户在小程序内分享给好友/群，新用户通过分享链接首次进入并登录后，绑定"邀请人 → 被邀请人"关系。微信不"自带"识别分享者身份，必须由分享者在 `path` query 里自报（用稳定的短码 `invite_code`，不暴露 openid）。
-2. **配额奖励**：成功邀请双方各 +N 持久奖励配额（`bonus_balance`），发消息时优先扣它，再扣每日基础额度。
-3. **付费与返点（手动）**：付费版（¥20/月，未来接微信支付）享更高每日额度（30/日）+ 免广告。付费时如果有上级，记录返点关系；返点金额由运营手动决定与转账，程序只**记录关系 + 标记已/待返点**，不规定金额。
-
-目标用户：当前 10–50 人体验版规模。所有 admin 操作走 HTTP 接口 + 静态后台页（运营端 = 项目所有者本人）。
+> 状态：草案 v2 · 日期 2026-05-03 · 关联 [`docs/handoff.md`](../handoff.md)
+>
+> v2 相较 v1 改动：去掉手动开通码 / `/admin/mark-paid` 路径，改用真·微信支付 JSAPI v3 + 测试用 mock 模式。
 
 ---
 
-## 2. 范围与不做的事
+## 1. 这个 spec 在解决什么
+
+把小程序从「免费聊」升级为「免费 + 付费 + 邀请裂变」三件事，并且做成**用户感受不到任何手动操作**：
+
+| 用户场景 | 用户感受 |
+|---|---|
+| 我要分享给朋友 | 点右上角"转发"，没了 |
+| 朋友打开后第一次登录 | 系统**自动**识别"我是被你邀请的"，双方各 +5 次免费查询，弹一个 toast |
+| 我想升级付费版 | 「关于」页点「开通 ¥20/月」→ 弹微信支付 → 付完立刻变付费版 |
+| 付费成功后我朋友返点 | 系统**自动**记录"这笔钱有上级"，我（运营）在 admin 后台看待返点列表，手动转账并标记 |
+
+**当前微信主体是个人，没法接微信支付**。这一版按"假定主体已经是个体工商户"来设计代码（按官方 v3 接口实现），但提供 **mock 模式**让你今天就能测 UI / 功能 / 数据流的全套闭环。等主体迁移完成 + 拿到商户号，**改一个 env 变量** `WXPAY_MODE=real` 即可切到真支付，不用改任何代码。
+
+---
+
+## 2. 范围
 
 ### 范围内
-- 邀请码生成、分享路径、首次登录绑定
-- 持久 `bonus_balance` 配额奖励
-- 付费/免费区分 → 不同每日额度 + `is_paid` 标志（前端可据此渲染 / 屏蔽广告）
-- 手动 `/admin/mark-paid` 写订阅记录 + 返点状态机
-- 静态 admin HTML 页面（容器同源，token 鉴权）
+- 邀请关系绑定（小程序内分享 → 自动识别上级 → 首次登录绑定）
+- 持久奖励配额（双方各 +5 次免费查询，扣消息时优先扣这个）
+- 付费 / 免费每日额度差异化（10 / 30）+ `is_paid` flag（未来给广告系统门控用）
+- 微信支付 JSAPI v3 完整接入（按官方文档）
+- Mock 模式：env 切换，不调真 wxpay 接口，本地直接走"已付费"路径
+- 微信支付异步通知（notify）→ 自动写订阅、自动标记返点状态
+- 静态 admin 后台页：查待返点 / 已返点 / 全部订阅 / 用户邀请关系
+- 数据库字段 + 订阅表
+- 防刷规则（自邀、重绑、回头补绑老用户上级）
 
 ### 不做（YAGNI）
-- ❌ 自动微信支付集成（个体工商户主体到位后另开一个 task）
 - ❌ 多级分销（仅 1 层 inviter）
-- ❌ 邀请海报 / 落地页 / 排行榜
-- ❌ 小程序内"我的邀请战绩"视图（不给邀请人看）
-- ❌ 退款逻辑（手动改 DB）
-- ❌ 小程序内广告系统本身（仅预留 `is_paid` 给将来接广告时门控）
+- ❌ 邀请海报 / 朋友圈定制图 / 排行榜
+- ❌ 小程序内"我的邀请战绩"页（不给邀请人看）
+- ❌ 退款流程 UI（手动改 DB）
+- ❌ 自动给上级转返点（永远手动）
+- ❌ 内置广告 SDK（仅在 `/user/me` 暴露 `is_paid` 给前端将来用）
+- ❌ 订阅续费提醒 / 自动续费（v1 一笔一笔买）
 
 ---
 
-## 3. 数据模型
+## 3. 数据要存什么（业务语言）
 
-### 3.1 `users` 集合 — 新增字段
+### 3.1 每个用户身上多记 5 项
 
-```ts
-{
-  // 既有
-  openid: string
-  created_at: Date
-  // ...
+| 业务含义 | 字段名 | 类型 / 默认 | 说明 |
+|---|---|---|---|
+| 我的邀请码 | `invite_code` | string(6) | 注册时自动生成，6 位字母数字。**用户看不到这个东西**，它藏在分享链接里 |
+| 是谁邀请了我 | `inviter_openid` | string \| null | 绑定一次永远不变。空 = 没人邀请我 |
+| 被邀请时间 | `invited_at` | Date \| null | 用于审计 |
+| 我还剩几次免费查询奖励 | `bonus_balance` | int ≥ 0，默认 0 | 发消息时优先扣这个，扣完才计入每日 10/30 限额 |
+| 我的付费有效期 | `paid_until` | Date \| null | `> now()` 即视为付费用户。null 表示从没付过 |
 
-  // 本次新增
-  invite_code: string         // 6 位 [A-Z0-9] 唯一码，注册时一次性生成
-  inviter_openid: string|null // 我的上级；绑定后永不可改
-  invited_at: Date|null       // 绑定时间
-  bonus_balance: number       // 奖励配额余额（>=0）
-  paid_until: Date|null       // 付费到期时间；> now() 即视为付费用户
-}
-```
+### 3.2 每笔付费产生一行"订阅记录"（新表 `subscriptions`）
 
-**默认值**：`invite_code` 注册时生成，`inviter_openid/invited_at/paid_until = null`，`bonus_balance = 0`。
+每行长这样：
 
-**`invite_code` 生成**：
-- 字符集 `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`（去掉易混的 0/O/1/I/L）共 32 字符
-- 长度 6 → 32^6 ≈ 10.7 亿，10 万人内冲突概率 < 0.5%
-- 注册时循环生成 + 唯一索引，冲突最多重试 5 次
+| 业务含义 | 字段 | 说明 |
+|---|---|---|
+| 谁付的钱 | `openid` | |
+| 当时他的上级是谁 | `inviter_openid` | **写入即冻结**，将来关系怎么变这一笔账归属不变 |
+| 付了多少钱 | `amount` | 整数，单位"分"（微信支付要求），20 元 = 2000 |
+| 付款时间 / 服务起止 | `paid_at` / `period_start` / `period_end` | |
+| 微信支付订单号 | `transaction_id` | 微信返的，唯一 |
+| 我们生成的订单号 | `out_trade_no` | 我们自己生成的，下单时用 |
+| 来源 | `source` | `'wxpay'` 或 `'mock'`（mock 模式生成的订阅打 mock 标，admin 后台一眼能区分） |
+| 返点状态 | `rebate_status` | `'none'`（无上级）/ `'pending'`（有上级，待你转钱）/ `'paid'`（你转过了） |
+| 你转账后的备注 | `rebate_note` | 自由文本："¥6.6 微信转账给王五 备注 xxx" |
+| 你转账时间 | `rebate_paid_at` | |
 
-### 3.2 `subscriptions` 集合 — 新建
+### 3.3 既有的 `daily_usage` 表不动结构，只改语义
 
-每次手动标记付费产生一行（**append-only**，永不删改主体字段）：
-
-```ts
-{
-  _id: string               // CloudBase 自动
-  openid: string            // 付费人
-
-  // ★ 邀请关系 snapshot
-  inviter_openid: string|null  // 付费时刻的上级，写入后即冻结
-
-  // 付费信息
-  amount: number            // 用户付的钱（元），通常 20
-  paid_at: Date             // 我方收到付款的时间
-  period_start: Date        // 服务开始时间
-  period_end: Date          // 服务结束时间（period_start + SUBSCRIPTION_PERIOD_DAYS）
-  payment_ref: string       // 付款参考：微信转账号/wxpay transaction_id/备注等
-
-  // 返点状态机
-  rebate_status: 'none' | 'pending' | 'paid'
-                            //  none = 没有上级，本来就不返
-                            //  pending = 有上级，待手动转账
-                            //  paid = 已手动转账
-  rebate_paid_at: Date|null // 返点完成时间
-  rebate_note: string|null  // 自由文本："¥10 微信转账 备注 xxx"
-}
-```
-
-**为什么 `inviter_openid` 要 snapshot 进 subscription**：将来若 user 被清理 / inviter_openid 字段误改，账目仍可追。订阅记录是 source of truth。
-
-**索引建议**：`{ openid: 1, paid_at: -1 }` + `{ rebate_status: 1, paid_at: -1 }`。
-
-### 3.3 `daily_usage` 集合 — 不动结构，改使用语义
-
-字段 `{ openid, date, used }` 不变。
-
-**校验改动**：原本硬编码 `used < 10`，改为 `used < currentUserDailyLimit`：
-- 付费用户（`users.paid_until > now()`）：`DAILY_LIMIT_PAID`（默认 30）
-- 否则：`DAILY_LIMIT_FREE`（默认 10）
+`{ openid, date, used }` 不变。原本扣减条件硬编码是 `used < 10`，改成 `used < 当前用户的每日上限`：
+- 付费用户（`paid_until > now()`）→ 30
+- 否则 → 10
 
 ---
 
-## 4. 后端 API
+## 4. 用户体验流程（按场景）
 
-### 4.1 用户态接口（鉴权 = 既有 openid 中间件）
+### 4.1 邀请绑定（完全无感）
 
-#### `GET /user/me`
-扩展既有响应，加 4 个字段：
+A 是老用户，B 是新用户：
+
+1. A 在小程序里点右上角「···」→「转发给朋友」→ 选 B
+   - A 啥也没做，他的邀请码已经被偷偷塞进分享卡
+2. B 收到聊天里的小程序卡，点开
+   - 小程序启动，**在打开瞬间从分享链接里读到 A 的邀请码**
+   - B 完全感觉不到
+3. B 点登录 → 微信授权 → 后端拿到 B 的 openid
+   - 系统自动绑定："B 的上级是 A"
+   - 两边各 +5 次奖励配额
+   - B 看到 toast：「已通过邀请获得 +5 次免费查询」
+4. 整个过程 B **没有输入任何东西**
+
+### 4.2 付费开通（也完全无感）
+
+C 已经登录了，今天想开通付费：
+
+1. C 在「关于」页看到「开通付费版 ¥20/月」按钮
+2. 点击 → 后端调微信支付下单接口拿到 `prepay_id` → 返回小程序
+3. 小程序自动调起微信支付收银台（`wx.requestPayment`）
+4. C 输支付密码 / 指纹 → 付款成功
+5. 大约 1–3 秒内，**微信服务器给我们后端发回调通知**
+6. 我们解密通知 → 验签 → 写订阅记录 → 更新 `paid_until` → 自动判断有没有上级 → 设置返点状态
+7. C 回到小程序，「关于」页显示「付费会员 · 有效期至 2026-06-03」，每日额度从 10 变 30 ✅
+
+**测试模式下（mock）**：
+- 步骤 2-3 跳过，后端直接走"已付费"路径，前端弹 modal「已模拟开通付费（测试模式）」
+- 数据库里这条订阅 `source='mock'`
+- 这样你今天就能完整测一遍 UI、扣减逻辑、admin 后台显示
+
+### 4.3 你（运营）的日常返点动作
+
+每周 / 每月：
+
+1. 浏览器打开 admin 后台 → 输 token → 进去
+2. 点「待返点」标签 → 看到列表：
+   ```
+   王五 ← 李四付费 ¥20 · 5月3日
+   赵六 ← 张三付费 ¥20 · 5月5日
+   ```
+3. 微信打开，转钱给王五（金额你自己定，¥6.6 / ¥10 都行）
+4. admin 页面点王五那行的「标记已发返点」→ 弹窗输入 `¥6.6 微信转账 5月10日` → 提交
+5. 这条挪到「已返点」标签
+
+> 程序不规定返点比例 / 金额，都是你手动决定，后台只负责"记录关系 + 标记状态"。
+
+---
+
+## 5. 后端接口设计
+
+### 5.1 用户态（既有 openid 中间件鉴权）
+
+#### `GET /user/me`（既有路由扩展）
+
+返回新加 5 个字段：
 
 ```jsonc
 {
+  // 既有
   "openid": "oXxx...",
-  "created_at": "2026-05-03T...",
   "today_used": 3,
-  "today_limit": 10,        // ← 改为基于 paid_until 计算
-  "is_paid": false,         // ← 新增
-  "paid_until": null,       // ← 新增
-  "invite_code": "A8K2P9",  // ← 新增
-  "inviter": null,          // ← 新增；已绑定时返回 { invite_code: "B3M7Q1" }
-  "bonus_balance": 5        // ← 新增
+  // 改动
+  "today_limit": 10,         // 动态：付费 30，免费 10
+  // 新增
+  "is_paid": false,
+  "paid_until": null,        // ISO 8601 或 null
+  "invite_code": "A8K2P9",
+  "inviter": null,           // { invite_code: "B3M7Q1" } 已绑定时
+  "bonus_balance": 5
 }
 ```
 
 #### `POST /invite/bind`
+
 ```jsonc
 // req
 { "code": "B3M7Q1" }
@@ -137,343 +168,390 @@
 { "ok": true, "bonus_added": 5 }
 
 // res 400
-{ "ok": false, "code": "SELF_INVITE" | "ALREADY_BOUND" | "WINDOW_EXPIRED" | "CODE_NOT_FOUND" | "INVALID_CODE_FORMAT" }
+{ "ok": false, "error": "SELF_INVITE" | "ALREADY_BOUND" | "WINDOW_EXPIRED" | "CODE_NOT_FOUND" | "INVALID_CODE_FORMAT" }
 ```
 
-**后端处理**：
-1. 校验 `code` 格式 → `INVALID_CODE_FORMAT`
-2. 查 `users` 找 inviter；找不到 → `CODE_NOT_FOUND`
-3. inviter 是自己 → `SELF_INVITE`
-4. 当前 user 已有 `inviter_openid` → `ALREADY_BOUND`
-5. 当前 user `paid_until != null` 或 `created_at` 距今 > `INVITE_BIND_WINDOW_DAYS` 天 → `WINDOW_EXPIRED`
-6. **事务（或两步幂等更新）**：
-   - 当前 user：`inviter_openid = inviter.openid`，`invited_at = now`，`bonus_balance += INVITE_REWARD_INVITEE`
-   - inviter：`bonus_balance += INVITE_REWARD_INVITER`
-7. 返回 `{ ok: true, bonus_added: INVITE_REWARD_INVITEE }`
+绑定规则（命中任一即拒）：
+- `code` 不存在 / 格式错 → `CODE_NOT_FOUND` / `INVALID_CODE_FORMAT`
+- `code` 对应 self → `SELF_INVITE`
+- 当前 user 已有 inviter_openid → `ALREADY_BOUND`
+- 当前 user `paid_until != null` 或注册超 `INVITE_BIND_WINDOW_DAYS` 天 → `WINDOW_EXPIRED`
 
-> CloudBase NoSQL 不支持多文档事务；用"先更新当前 user（带 `inviter_openid==null` 条件）→ 成功后再 +inviter bonus"两步：第二步失败概率极低，失败时记日志、写补偿队列（v1 暂仅记日志，后续运维侧可手动修正）。
+成功后两步幂等更新：
+1. 当前 user：`inviter_openid = X, invited_at = now, bonus_balance += INVITE_REWARD_INVITEE`（条件 `inviter_openid == null`）
+2. inviter：`bonus_balance += INVITE_REWARD_INVITER`
 
-### 4.2 Admin 接口（鉴权 = `X-Admin-Token` header）
+> CloudBase NoSQL 不支持多文档事务。第二步失败几率极低，失败时仅日志告警 + 写补偿队列（v1 仅日志，运维侧手动修复）。
 
-```
-POST /admin/mark-paid
-GET  /admin/rebates?status=pending|paid
-POST /admin/rebates/:subscription_id/mark-paid
-GET  /admin/subscriptions?limit=50&offset=0
-```
+#### `POST /payment/create-order` ★ 新增
 
-#### `POST /admin/mark-paid`
+前端点「开通付费」按钮调用。
+
 ```jsonc
 // req
+{ "months": 1 }                       // 默认 1，预留多月一次性付
+
+// res 200 (real 模式)
 {
-  "openid": "oXxx...",
-  "amount": 20,
-  "payment_ref": "WXP-2026-05-03-001",
-  "months": 1                    // 默认 1
+  "mode": "real",
+  "wx_payment": {
+    "timeStamp": "1714766400",
+    "nonceStr": "...",
+    "package": "prepay_id=...",
+    "signType": "RSA",
+    "paySign": "..."
+  }
 }
 
-// res 200
+// res 200 (mock 模式)
 {
-  "ok": true,
+  "mode": "mock",
   "subscription_id": "...",
-  "rebate_status": "pending",    // 或 "none"
   "paid_until": "2026-06-03T..."
 }
+
+// res 4xx
+{ "ok": false, "error": "INTERNAL_WXPAY_FAILED" | "RATE_LIMITED" }
 ```
 
-后端处理：
-1. 查 user，不存在 → 404
-2. 计算 `period_start = max(now, user.paid_until || now)`，`period_end = period_start + months * SUBSCRIPTION_PERIOD_DAYS`
-3. 写 subscription 行（`inviter_openid = user.inviter_openid` snapshot；`rebate_status = 'pending' if inviter else 'none'`）
-4. 更新 `user.paid_until = period_end`
+**real 模式后端逻辑**：
+1. 生成 `out_trade_no`（如 `LT{yyyymmddhhmmss}{rand6}`，存入返回的 prepay 上下文）
+2. 调 `https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi`，必传字段：
+   - `appid` = 小程序 AppID
+   - `mchid` = 商户号
+   - `description` = `'love-train 付费会员（1 个月）'`
+   - `out_trade_no`
+   - `notify_url` = `https://<容器域名>/wxpay/notify`
+   - `amount.total` = `SUBSCRIPTION_AMOUNT_CENTS`（默认 2000）
+   - `payer.openid` = 当前用户 openid
+3. 拿到 `prepay_id`，构造 `wx.requestPayment` 五字段：
+   - `timeStamp` = 当前秒级时间戳
+   - `nonceStr` = 32 位随机
+   - `package` = `'prepay_id=' + prepay_id`
+   - `signType` = `'RSA'`
+   - `paySign` = 用商户私钥 RSA-SHA256 签名 `appId\ntimeStamp\nnonceStr\npackage\n`，base64
+4. 返回前端
 
-#### `GET /admin/rebates?status=pending`
+> 不做 pending_payments 表（YAGNI）：防重复靠前端按钮按下立刻 disable + 后端开 60s 内同 openid 限流（`RATE_LIMITED`）；订单一致性靠 `transaction_id` 唯一索引在 notify 时去重。如果出现"用户付了钱但 notify 一直没到"的极端场景，未来加 wxpay 主动查询 API 兜底。
+
+**mock 模式后端逻辑**：
+1. 跳过 wxpay API
+2. 直接走 `recordPayment(openid, amount, source='mock')` 内部函数（同 `/wxpay/notify` 用的同一函数）
+3. 返回 `{ mode: 'mock', subscription_id, paid_until }`
+
+#### `POST /wxpay/notify` ★ 新增（微信回调）
+
+微信支付服务器在用户付款成功后异步 POST 来。
+
+**请求头**：
+- `Wechatpay-Signature` / `Wechatpay-Serial` / `Wechatpay-Timestamp` / `Wechatpay-Nonce`
+
+**请求体**（外层）：
 ```jsonc
-[
-  {
-    "subscription_id": "...",
-    "paid_user": {
-      "openid": "oXxx...",
-      "invite_code": "A8K2P9",
-      "paid_at": "2026-05-03T...",
-      "amount": 20
-    },
-    "inviter": {
-      "openid": "oYyy...",
-      "invite_code": "B3M7Q1"
-    },
-    "rebate_status": "pending"
+{
+  "id": "...",
+  "create_time": "...",
+  "event_type": "TRANSACTION.SUCCESS",
+  "resource_type": "encrypt-resource",
+  "resource": {
+    "algorithm": "AEAD_AES_256_GCM",
+    "ciphertext": "...",
+    "associated_data": "transaction",
+    "nonce": "..."
   }
-]
+}
 ```
 
-`?status=paid` 时额外含 `rebate_paid_at` 和 `rebate_note`。
+**处理步骤**：
+1. **验签**：用微信支付平台公钥（v3 平台证书 / 平台公钥）验证 `Wechatpay-Signature` 是否合法。验签失败 → 返 401，记日志，不进数据库
+2. **解密**：用 APIv3 密钥 + AEAD_AES_256_GCM + nonce + associated_data 解密 `ciphertext`，得到原始通知 JSON：
+   ```jsonc
+   {
+     "out_trade_no": "LT...",
+     "transaction_id": "...",
+     "trade_state": "SUCCESS",
+     "payer": { "openid": "..." },
+     "amount": { "total": 2000, "payer_total": 2000, "currency": "CNY" }
+   }
+   ```
+3. **幂等检查**：根据 `transaction_id` 查 `subscriptions`，已存在 → 直接返成功（防止微信重复回调）
+4. **写订阅** + **更新 user.paid_until**：调内部 `recordPayment(openid, amount, transaction_id, out_trade_no, source='wxpay')`
+5. **必返**：`200 + { code: "SUCCESS", message: "OK" }`，否则微信会按指数退避重试最多 8 次（24h 内）
 
-#### `POST /admin/rebates/:subscription_id/mark-paid`
-```jsonc
-// req
-{ "rebate_note": "¥10 微信转账 备注 xxx" }
+> 用 `wechatpay-node-v3-ts` SDK 处理验签 / 解密：`pay.verifySign(headers, body)` + `pay.decipher_gcm(...)`。**不要自己写 RSA / AES**，错一字节就过不了。
 
-// res 200
-{ "ok": true }
+### 5.2 Admin 接口（`X-Admin-Token` header 鉴权）
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| `GET` | `/admin/rebates?status=pending\|paid` | 列待返点 / 已返点 |
+| `POST` | `/admin/rebates/:subscription_id/mark-paid` | body `{ rebate_note }`，标记已发返点 |
+| `GET` | `/admin/subscriptions?limit&offset` | 全部订阅倒序，含 source = wxpay / mock 标记 |
+| `GET` | `/admin/users?invite_code=&openid=` | 查用户邀请关系（用于核对） |
+| `GET` | `/admin/users/:openid/referrals` | 这个用户邀请了哪些人 |
+
+> **没有** `/admin/mark-paid`（v1 里有，v2 删了）— 付费一律走 wxpay 通道（real 或 mock）。
+
+### 5.3 Admin 静态页
+
+```
+GET /admin/{ADMIN_UI_PATH_SEGMENT}/         返回 admin.html
+GET /admin/{ADMIN_UI_PATH_SEGMENT}/*         静态资源
 ```
 
-校验：subscription 必须存在；`rebate_status` 必须为 `pending`（不允许从 `none` 跳过来）；写入 `rebate_status='paid'`、`rebate_paid_at=now`、`rebate_note`。
-
-#### `GET /admin/subscriptions?limit&offset`
-返回全部订阅（按 `paid_at` 倒序），含 inviter 关系字段，admin 后台"全部订阅"标签页用。
-
-### 4.3 Admin 静态页
-
-```
-GET /admin/{ADMIN_UI_PATH_SEGMENT}/  → 返回 admin.html（公开）
-GET /admin/{ADMIN_UI_PATH_SEGMENT}/* → 静态资源
-```
-
-env `ADMIN_UI_PATH_SEGMENT` 默认 `ui-x9k2`，部署时改成更长随机串。最终 URL 形如 `https://...sh.run.tcloudbase.com/admin/ui-x9k2/`。
+env `ADMIN_UI_PATH_SEGMENT` 默认 `ui-x9k2`，部署时改更长随机串。
 
 ---
 
-## 5. 配额奖励机制
+## 6. 配额扣减机制
 
-### 5.1 扣减顺序
-聊天发起时（`POST /chat`）扣减次数的逻辑改为：
+`POST /chat` 入口扣次数的逻辑改为：
 
-```ts
-// 伪代码
-const limit = user.paid_until > now ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE
-const todayUsed = await getDailyUsage(openid, today)
+```
+limit = (user.paid_until > now) ? DAILY_LIMIT_PAID : DAILY_LIMIT_FREE
+todayUsed = daily_usage 表查今天
 
-// decrementBonusAtomic 用条件 update：where bonus_balance > 0, $inc -1, 返回是否命中
-const bonusConsumed = await decrementBonusAtomic(openid)
+// 原子条件 update：where bonus_balance > 0, $inc -1，返回是否命中
+bonusConsumed = decrementBonusAtomic(openid)
+
 if (bonusConsumed) {
   // 已扣 1 点 bonus，放行
 } else if (todayUsed < limit) {
-  await incrementDailyUsage(openid, today)
+  incrementDailyUsage(openid, today)  // 既有逻辑
 } else {
   return 429 QUOTA_EXCEEDED
 }
 ```
 
-### 5.2 quota-badge 显示
-```
-今日 (limit - used) ＋ 奖励 N
-e.g.  今日 7 / 10  ＋奖励 12
-付费时：今日 27 / 30  ＋奖励 12
-```
-
-具体文案在 plan 阶段对照 Claude Design 微调。
-
-### 5.3 触发奖励
-仅在 `/invite/bind` 成功时触发，双方各 +`INVITE_REWARD_*`。**没有其他自动加 bonus 路径**（admin 页将来可加"手动赠送"按钮，本期不做）。
-
-### 5.4 边界
-- `bonus_balance` 不限上限（理论可累积，体验版规模无风险）
-- 无过期机制（v1 简化；如出现刷邀请屯配额可后续加 30 天过期）
+**前端 quota-badge 显示**：`今日 X / 限额` + 若 `bonus_balance > 0` 追加 `+奖励 N`。
 
 ---
 
-## 6. 邀请绑定规则
+## 7. 邀请触发路径（前端）
 
-### 6.1 何时可绑
-当且仅当：
-- `users.inviter_openid == null`（一次终生）
-- `users.paid_until == null`（未付费过）
-- `now() - users.created_at < INVITE_BIND_WINDOW_DAYS` 天（默认 7）
+### 7.1 chat 页 — 实现 `onShareAppMessage`
 
-### 6.2 触发路径
-1. 分享者：`onShareAppMessage` 把 `path` 写为 `/pages/login/login?ic={my_invite_code}`
-2. 接收者打开小程序：
-   - 已经登录过的老用户：读 `options.ic` → 调 `/invite/bind`，按规则可能 `WINDOW_EXPIRED`/`ALREADY_BOUND`
-   - 新用户首启：先存 `wx.setStorageSync('pending_ic', ic)` → 走完登录拿到 openid → 调 `/invite/bind` → 清掉 storage
-
-### 6.3 防自邀
-- `code → openid` 比对，等于 self → `SELF_INVITE`
-- 接收者打开自己分享的链接（在自己手机上点了又点）会被拒，UI 不弹错（静默忽略）
-
----
-
-## 7. 付费与返点流程（手动）
-
-> 这是当前阶段（无微信支付）的运营动作。
-
-```
-[用户]
-  在小程序 about 页看到"会员开通查询码" = openid 后 6 位
-  微信转你 ¥20，备注查询码
-
-[你]
-  1. 比对 about 页查询码 → 找到完整 openid（admin 页"全部用户"未做，先用查询码足够）
-     [简化：让用户在转账后在小程序里自报；admin 输入 openid 即可]
-  2. admin 后台 → "录入付费" 表单 → 提交
-  3. 后端写 subscription（rebate_status=pending 或 none）+ 更新 paid_until
-  4. 用户次日打开小程序 → /user/me 返回 is_paid=true, today_limit=30
-  
-[隔几天]
-  5. admin 后台 → "待返点" 标签 → 看到 N 条
-  6. 微信转账给上级（金额你自己定，比如 ¥6.6）
-  7. 点"标记已发返点" → 弹窗输入备注 → 提交
-  8. 该条移到"已返点"标签
-
-[未来接微信支付后]
-  - "录入付费"被 wxpay 回调路由替代（同一段写订阅逻辑）
-  - 返点流程不变（仍手动）
-```
-
----
-
-## 8. Admin 后台页
-
-### 8.1 部署形态
-- 单文件 `container/public/admin.html`（HTML + CSS + 内联 JS，约 300 行）
-- 由 `@fastify/static` 在 `/admin/{ADMIN_UI_PATH_SEGMENT}/` 提供
-- 同源调用 admin API，无 CORS
-
-### 8.2 鉴权
-- 页面公开（不含敏感数据）
-- 顶部输入 `X-Admin-Token`，存 `localStorage`
-- 所有 fetch 自动注入 header；无 token 不发请求
-
-### 8.3 功能
-四个 tab：
-
-| Tab | 数据源 | 操作 |
-|---|---|---|
-| 待返点 | `GET /admin/rebates?status=pending` | "标记已发"按钮 → modal 输入 `rebate_note` → POST mark-paid |
-| 已返点 | `GET /admin/rebates?status=paid` | 仅查看 |
-| 全部订阅 | `GET /admin/subscriptions` | 仅查看，倒序 |
-| 录入付费 | 表单 | POST /admin/mark-paid |
-
-### 8.4 视觉
-- 沿用小程序 Claude Design tokens（米白底 #f7f3ec、橙色强调 #e76f51、酒红次要、等宽数字）
-- 不引入框架/构建工具，保持单文件可直接编辑
-
-### 8.5 路径混淆
-- 见 §10 `ADMIN_UI_PATH_SEGMENT`
-- 不暴露 `/admin/` 根目录列表（只挂明确的 `/admin/{SEGMENT}/...` 静态资源 + 各 admin API 端点）；API 自带 token 鉴权
-
----
-
-## 9. 前端改动
-
-### 9.1 chat 页
-- 实现 `Page.onShareAppMessage`：
-  ```ts
-  onShareAppMessage() {
-    const ic = this.data.user?.invite_code
-    return {
-      title: '童锦程教你怎么搞定她',          // 文案 plan 阶段确认
-      path: ic ? `/pages/login/login?ic=${ic}` : '/pages/login/login',
-      imageUrl: '/assets/share-cover.png'      // 5:4，资源 plan 阶段交付
-    }
+```ts
+onShareAppMessage() {
+  const ic = this.data.user?.invite_code
+  return {
+    title: '童锦程教你怎么搞定她',
+    path: ic ? `/pages/login/login?ic=${ic}` : '/pages/login/login',
+    imageUrl: '/assets/share-cover.png'
   }
-  ```
+}
+```
 
-### 9.2 login 页
-- `onLoad(options)`：
-  ```ts
+> 文案 + 分享卡图在 plan 阶段确认，不在本 spec。
+
+### 7.2 login 页 — `onLoad` 读 ic
+
+```ts
+onLoad(options) {
   if (options.ic && /^[A-Z0-9]{6}$/.test(options.ic)) {
     wx.setStorageSync('pending_ic', options.ic)
   }
-  ```
-- 登录拿到 openid 之后：
-  ```ts
-  const ic = wx.getStorageSync('pending_ic')
-  if (ic) {
-    const r = await api.bindInvite(ic)
-    wx.removeStorageSync('pending_ic')
-    if (r.ok) {
-      // toast: 已通过邀请获得 +5 奖励配额
-    }
-    // 失败静默；用户感知不到
-  }
-  ```
+}
+```
 
-### 9.3 about 页
-新增三块：
-- **我的会员**：免费 vs 付费状态条；付费显示"有效期至 YYYY-MM-DD"
-- **会员开通查询码**：openid 后 6 位（明文展示，用于转账备注）
-- **我的邀请码 + 邀请按钮**：显示邀请码，引导"点右上角 ··· 转发给好友"
-
-### 9.4 quota-badge
-- 改显示逻辑：`today X / Y` + 若 `bonus_balance > 0` 追加 `+奖励 N`
-
-### 9.5 utils/api.ts
-新增方法：
+登录拿到 openid 之后：
 ```ts
-api.getMe()                              // 已有 /user/me，更新返回类型
-api.bindInvite(code: string)
+const ic = wx.getStorageSync('pending_ic')
+if (ic) {
+  const r = await api.bindInvite(ic)
+  wx.removeStorageSync('pending_ic')
+  if (r.ok) wx.showToast({ title: `已通过邀请 +${r.bonus_added} 次` })
+  // 失败静默
+}
+```
+
+### 7.3 about 页
+
+新增三块：
+
+1. **我的会员状态**
+   - 免费版：「免费会员 · 每日 10 次」+ 显眼的「开通付费版 ¥20/月」按钮
+   - 付费版：「付费会员 · 每日 30 次 · 有效期至 YYYY-MM-DD」+ 灰一点的「续费」按钮（也调 `/payment/create-order`）
+
+2. **邀请好友**
+   - 显示「我的邀请码 A8K2P9」（仅展示，**不引导用户口头传播**）
+   - 一行说明：「点右上角 ··· 转发给朋友，对方登录后双方各 +5 次免费查询」
+
+3. （已有）清空对话按钮
+
+### 7.4 付费按钮处理
+
+```ts
+async tapSubscribe() {
+  const r = await api.createOrder({ months: 1 })
+  if (r.mode === 'mock') {
+    wx.showModal({ title: '已模拟开通（测试模式）', content: `有效期至 ${r.paid_until}` })
+    this.refreshMe()
+    return
+  }
+  // real 模式
+  wx.requestPayment({
+    ...r.wx_payment,
+    success: () => {
+      // 微信侧确认完成，但 paid_until 由 notify 回调写入
+      // 前端轮询 /user/me 1 次（最多 3 次，间隔 1s）等回调到位
+      this.pollPaidStatus()
+    },
+    fail: (err) => { /* user cancelled or pay failed */ }
+  })
+}
 ```
 
 ---
 
-## 10. 环境变量
+## 8. 微信支付前置条件（你那边的事）
 
-新增（**部署前必须在 CloudBase 控制台配置**）：
+> 等你主体迁移完成 + 申请下来 + 我们这边换 env 之后才生效。**代码不依赖这些就位才能开发，靠 mock 模式跑测试**。
+
+| 项 | 你需要做的 |
+|---|---|
+| 主体 | 个人 → 个体工商户（小程序后台「设置 → 基本设置 → 主体类型」迁移，约 30 天） |
+| 微信支付商户号 | https://pay.weixin.qq.com 申请（个体工商户主体下 3-7 天） |
+| 商户号 ↔ AppID 绑定 | 商户后台「产品中心 → AppID 账号管理 → 关联 AppID」 |
+| 商户 API 证书 | 商户后台「账户中心 → API 安全 → 申请 API 证书」，下载 `apiclient_cert.pem` + `apiclient_key.pem` |
+| APIv3 密钥 | 商户后台「账户中心 → API 安全 → 设置 APIv3 密钥」，自定义 32 位字符串 |
+| 平台证书 | 用 SDK 自动下载平台证书（首次启动时拉取，缓存到容器） |
+| JSAPI 授权目录 | 商户后台配置：`https://<容器域名>/payment/`（前端调起页所在 path 的目录） |
+| notify_url 域名 | 配置在商户后台 + 部署到 HTTPS 域名（云托管自带）|
+| 小程序 request 合法域名 | `https://api.mch.weixin.qq.com` 加到小程序后台「服务器域名」 |
+
+---
+
+## 9. env 配置（部署前必填）
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `ADMIN_TOKEN` | (无默认) | 32 位以上随机串；缺失时 admin API 全部 503 |
-| `ADMIN_UI_PATH_SEGMENT` | `ui-x9k2` | admin 页路径段（位于 `/admin/` 之下），部署时改成更长随机串 |
-| `INVITE_REWARD_INVITER` | `5` | 邀请人 bind 成功获得的 bonus |
-| `INVITE_REWARD_INVITEE` | `5` | 被邀请人 bind 成功获得的 bonus |
-| `INVITE_BIND_WINDOW_DAYS` | `7` | 注册后多少天内可绑定 |
-| `DAILY_LIMIT_FREE` | `10` | 免费用户每日基础额度 |
-| `DAILY_LIMIT_PAID` | `30` | 付费用户每日基础额度 |
-| `SUBSCRIPTION_AMOUNT` | `20` | 标准订阅金额（仅 admin 表单默认值用，不强制） |
-| `SUBSCRIPTION_PERIOD_DAYS` | `30` | 一个订阅周期天数 |
+| `ADMIN_TOKEN` | (无默认) | admin 后台 token，32 位以上随机串 |
+| `ADMIN_UI_PATH_SEGMENT` | `ui-x9k2` | admin 页 URL 段，部署时改长 |
+| `INVITE_REWARD_INVITER` | `5` | 邀请人成功带来一个绑定，获得几次奖励 |
+| `INVITE_REWARD_INVITEE` | `5` | 被邀请人成功绑定，获得几次奖励 |
+| `INVITE_BIND_WINDOW_DAYS` | `7` | 注册后多少天内可绑定上级 |
+| `DAILY_LIMIT_FREE` | `10` | 免费用户每日基础查询次数 |
+| `DAILY_LIMIT_PAID` | `30` | 付费用户每日基础查询次数 |
+| `SUBSCRIPTION_AMOUNT_CENTS` | `2000` | 一笔订阅金额（分），20 元 = 2000 |
+| `SUBSCRIPTION_PERIOD_DAYS` | `30` | 一笔订阅顶几天 |
+| **`WXPAY_MODE`** | `mock` | `mock` \| `real`，控制是否走真支付 |
+| `WXPAY_APPID` | (real 模式必填) | 小程序 AppID（与 `app.json` 一致） |
+| `WXPAY_MCHID` | (real 模式必填) | 商户号 |
+| `WXPAY_API_V3_KEY` | (real 模式必填) | APIv3 密钥（32 位字符串） |
+| `WXPAY_CERT_SERIAL` | (real 模式必填) | 商户证书序列号 |
+| `WXPAY_PRIVATE_KEY_PATH` | (real 模式必填) | 商户私钥文件路径，容器内挂载 |
+| `WXPAY_NOTIFY_URL` | (real 模式必填) | `https://<container-domain>/wxpay/notify` |
 
 ---
 
-## 11. 安全与防刷
+## 10. 安全与防刷
 
 | 风险 | 防御 |
 |---|---|
-| 自邀获奖励 | `inviter_openid != self` 校验 |
-| 反复绑定换上级 | `inviter_openid` 一次写入终生不可改 |
-| 老用户回头绑高返点上级 | 7 天 + 未付费 双窗口 |
-| 邀请码暴力枚举 | 32^6 空间 + 后端无限速属边界（v1 暂不加 rate-limit；如发现攻击再加 IP / openid 维度限流） |
-| admin 接口暴露 | `X-Admin-Token` env 必填；token 缺失或不匹配 → 403 |
-| admin 页被无意爬到 | 路径含随机后缀（`ADMIN_UI_PATH_SUFFIX`） |
-| openid 隐私 | 永不出现在分享 path 里（用 `invite_code` 中转） |
-| bonus_balance 成负 | 写入用条件 `bonus_balance > 0` 才扣，避免并发负值 |
+| 自邀获奖励 | `inviter_openid != self` |
+| 反复绑换上级 | `inviter_openid` 一次写入终生不可改 |
+| 老用户回头补绑高返点上级 | 7 天 + 未付费 双窗口（命中即拒 `WINDOW_EXPIRED`） |
+| 邀请码暴力枚举 | 字母数字组合 32^6 ≈ 10 亿，未来有量再加 IP 限流 |
+| openid 出现在分享 path | 不会，只用 `invite_code` 中转 |
+| bonus_balance 并发负值 | 原子条件 update（`where bonus_balance > 0, $inc -1`） |
+| admin 接口被探测 | `X-Admin-Token` 必填，缺失 / 不匹配 → 403；admin 静态页路径含随机后缀 |
+| **wxpay 回调伪造** | `Wechatpay-Signature` 必须用平台证书验签通过；验签失败 → 401 不写库 |
+| **wxpay 回调重放** | `transaction_id` 唯一索引 + 幂等查询 |
+| **mock 模式被打到生产** | `WXPAY_MODE=real` 时强制要求 `WXPAY_*` 全套 env 齐全；缺失则启动失败 |
+| **mock 订阅被误认为真订单** | `subscriptions.source = 'mock' \| 'wxpay'`，admin 页明确标记 |
+| API 证书 / 私钥泄露 | 私钥不进 git，CloudBase 部署时挂载到容器 `/secrets/` |
 
 ---
 
-## 12. 涉及文件清单（在 `~/Desktop/love-train-mp/`）
+## 11. 测试要点
+
+### 11.1 mock 模式（今天就能跑）
+- [ ] A 邀请 B：B 走完登录后 `/user/me` 显示 `bonus_balance=5`，inviter 字段非空
+- [ ] A 也 `bonus_balance=5`
+- [ ] A 已注册 8 天 + 未付费，再点别人分享 → `WINDOW_EXPIRED`
+- [ ] B 已经被 X 邀请过，再点 A 的分享 → `ALREADY_BOUND`
+- [ ] A 自己点自己分享的链接 → `SELF_INVITE`
+- [ ] C 在 about 页点「开通付费」→ modal 弹「已模拟开通」→ `paid_until` 写入 → 每日额度变 30
+- [ ] admin 后台「全部订阅」看到这条 source = mock
+- [ ] C 有上级，admin「待返点」列表能看到
+- [ ] 点「标记已发」+ 备注 → 挪到「已返点」
+- [ ] chat 页发消息：先消耗 bonus_balance 5 次，再算 daily_usage
+
+### 11.2 real 模式（商户号到位后）
+- [ ] 沙箱环境把 `WXPAY_MODE=real` + 配齐 wxpay env，真机测付款
+- [ ] 验签失败手动构造（错误 sig）→ /wxpay/notify 返 401
+- [ ] 重复回调（同一 transaction_id）→ 幂等返 200，不写第二行订阅
+- [ ] 付费 + notify 到达后 1-3 秒内 `/user/me` 反映 `is_paid=true`
+
+### 11.3 单元测试（vitest，跑在 mongo-adapter）
+- invite-code 生成无碰撞（采样 1 万次）
+- `/invite/bind` 五种失败码各一例
+- `/invite/bind` 成功路径双方 +5
+- `recordPayment` 内部函数：mock 与 wxpay 两种 source，inviter 有 / 无两种 rebate_status
+- `/admin/rebates/:id/mark-paid` 状态机：仅 `pending → paid` 允许
+- chat 扣减：bonus 优先 → daily_usage
+
+---
+
+## 12. Admin 后台页（功能清单）
+
+单文件 `container/public/admin.html`，HTML+CSS+JS 一体，约 300-400 行，由 `@fastify/static` 在 `/admin/{ADMIN_UI_PATH_SEGMENT}/` 提供。同源调用 admin API，无 CORS。
+
+页面顶部输入 token，存 localStorage。五个 tab：
+
+| Tab | 数据源 | 操作 |
+|---|---|---|
+| 待返点 | `GET /admin/rebates?status=pending` | 「标记已发」按钮 → modal 输 `rebate_note` → POST mark-paid |
+| 已返点 | `GET /admin/rebates?status=paid` | 仅查看，含 `rebate_paid_at` + `rebate_note` |
+| 全部订阅 | `GET /admin/subscriptions` | 倒序，每行明确标记 source = wxpay / **mock** |
+| 用户查询 | `GET /admin/users?...` | 输 invite_code 或 openid 查用户 + 看他邀请了谁 |
+| 系统状态 | 静态展示 + `GET /admin/health`（new） | 显示当前 `WXPAY_MODE`、env 是否齐全、最近 1h 订阅数 |
+
+视觉沿用小程序 Claude Design tokens：米白底 #f7f3ec、橙色强调 #e76f51、酒红次要、等宽数字。
+
+---
+
+## 13. 涉及文件改动清单（在 `~/Desktop/love-train-mp/`）
 
 ```
 container/
+  package.json                              ← +@fastify/static, +wechatpay-node-v3-ts
   public/
-    admin.html                           ← 新建
+    admin.html                              ← 新建
   src/
-    server.ts                            ← 注册 @fastify/static + admin 路由
-    config.ts                            ← 加新增 env 读取
+    server.ts                               ← 注册 @fastify/static + wxpay 路由
+    config.ts                               ← 新增 env 读取 + 启动期 mode/env 校验
     middleware/
-      admin.ts                           ← 新建：X-Admin-Token 校验
+      admin.ts                              ← 新建：X-Admin-Token 校验
     routes/
-      invite.ts                          ← 新建：/invite/bind
-      admin.ts                           ← 新建：/admin/mark-paid 等
-      user.ts                            ← 改：/user/me 返回新字段
-      chat.ts                            ← 改：扣 bonus 优先 + 用动态 limit
+      invite.ts                             ← 新建：/invite/bind
+      payment.ts                            ← 新建：/payment/create-order
+      wxpay.ts                              ← 新建：/wxpay/notify
+      admin.ts                              ← 新建：/admin/rebates 等
+      user.ts                               ← 改：/user/me 加新字段
+      chat.ts                               ← 改：扣减优先 bonus + 动态 limit
+    services/
+      payment.ts                            ← 新建：recordPayment + WxpayClient + mock 分支
+      invite.ts                             ← 新建：bindInvite 业务逻辑
     db/
-      cloudbase-adapter.ts               ← 加 invite/subscription 方法
-      adapter.ts                         ← 接口加方法签名
-      mongo-adapter.ts                   ← 测试 stub 跟进
+      cloudbase-adapter.ts                  ← 加 invite/subscription/payment 方法
+      adapter.ts                            ← 接口加方法签名
+      mongo-adapter.ts                      ← 测试 stub 跟进
     utils/
-      invite-code.ts                     ← 新建：生成 + 校验
-  package.json                           ← +@fastify/static
+      invite-code.ts                        ← 新建：生成 + 校验
+      wxpay-sign.ts                         ← 新建：仅放 paySign 拼装（验签解密走 SDK）
 
 miniprogram/
   pages/
-    chat/chat.ts                         ← onShareAppMessage
-    login/login.ts                       ← onLoad ic + 登录后 bind
-    about/about.{wxml,wxss,ts}           ← 我的会员 + 邀请码
+    chat/chat.ts                            ← onShareAppMessage
+    login/login.ts                          ← onLoad ic + 登录后 bind
+    about/about.{wxml,wxss,ts}              ← 我的会员 + 邀请码 + 开通付费按钮
   components/
-    quota-badge/                         ← 显示 bonus_balance
+    quota-badge/                            ← 显示 bonus
   utils/
-    api.ts                               ← +bindInvite, 改 getMe 返回类型
-    consts.ts                            ← 加邀请相关常量
+    api.ts                                  ← +bindInvite, +createOrder, 改 getMe
+    consts.ts                               ← 加邀请相关常量
 
 docs/
   specs/2026-05-03-invite-and-subscription-design.md   ← 本文件
@@ -481,43 +559,36 @@ docs/
 
 ---
 
-## 13. 测试要点
+## 14. 上线后切真支付的 checklist
 
-### 后端单测（vitest，跑在 mongo-adapter）
-- invite-code 生成无碰撞（采样 1 万次）
-- `/invite/bind` 五种失败码各覆盖一例
-- `/invite/bind` 成功路径双方 bonus_balance 各 +5
-- `/admin/mark-paid` 有/无 inviter 两种 rebate_status
-- `/admin/rebates/:id/mark-paid` 状态机：仅 `pending → paid` 允许
-- chat 扣减优先 bonus → daily_usage
+> 这部分是给"未来某天"用的备忘，不在 plan 阶段执行。
 
-### 模拟器手测
-- A 账号生成邀请码 → 复制分享路径
-- 微信开发者工具切换 B 账号 → 通过自定义编译条件传 `ic=A_CODE` → 登录后两边 bonus 各 +5 ✓
-- B 改时间机：`created_at` 改成 8 天前再尝试 bind → `WINDOW_EXPIRED` ✓
-- B 调 `/admin/mark-paid` → 次日 about 页显示付费 ✓
-- 模拟连续发 30 条消息（付费）+ 5 bonus → 35 条都通过；第 36 条 429 ✓
-
-### admin 页手测
-- 错 token → 列表为空，不报敏感信息
-- 正确 token → 待返点列表展示完整
-- 标记已发后 → pending 列表少一行，paid 列表多一行
-- 录入付费 → /user/me 立刻反映
-
----
-
-## 14. 未来工作（不在本期范围）
-
-| 项 | 触发时机 | 大致方向 |
-|---|---|---|
-| 微信支付集成 | 主体改个体工商户 + JSAPI 支付能力开通 | 新加 `/wxpay/notify` 路由，复用 `mark-paid` 内部函数 |
-| 广告渲染 | 引入广告 SDK 时 | chat 页基于 `is_paid` 决定渲染 banner / 插屏 |
-| 邀请人战绩页 | 邀请规模上量 | 小程序内"我的邀请"页，调 `/user/me/referrals` |
-| 邀请奖励过期 | 出现刷邀请屯额度 | bonus 加 `granted_at`，30 天滚动过期 |
-| Bonus 手动赠送 | 客服需求 | admin 页"补偿用户"操作 |
+1. 主体迁移到个体工商户（30 天审核）
+2. 在 https://pay.weixin.qq.com 申请商户号（3-7 天）
+3. 商户号关联 AppID（即时）
+4. 下载 API 证书 + 设置 APIv3 密钥
+5. CloudBase 控制台改 env：
+   - `WXPAY_MODE` = `mock` → `real`
+   - 填齐 `WXPAY_*` 七个变量
+   - 把 `apiclient_key.pem` 上传到容器（云托管「文件管理」或 Dockerfile 里 COPY）
+6. 商户后台配置 JSAPI 授权目录 + notify_url
+7. 小程序后台「服务器域名」加 `https://api.mch.weixin.qq.com`
+8. 重新部署容器
+9. 真机沙箱测一笔（1 分钱）
+10. 把测试订阅记录从 DB 删掉（或保留，反正 source=mock 一目了然）
 
 ---
 
 ## 15. 进入实施
 
-下一步：在 `docs/plans/` 下生成 implementation plan（按 task 切分，TDD 顺序）。
+下一步：在 `docs/plans/` 下生成 implementation plan，按 task 切分（建议按依赖顺序）：
+
+1. **Task 1**：DB schema + invite-code utils
+2. **Task 2**：`/invite/bind` + `/user/me` 扩展 + chat 扣减逻辑
+3. **Task 3**：mock 模式 `/payment/create-order` + `recordPayment` + 订阅写入
+4. **Task 4**：`/wxpay/notify` + 验签解密 SDK 接入（real 路径，但 mock 模式不触发）
+5. **Task 5**：admin 路由 + admin.html
+6. **Task 6**：前端 chat / login / about / quota-badge
+7. **Task 7**：联调 mock 模式全链路 + 单测
+
+每个 task 独立可测，可分 PR。

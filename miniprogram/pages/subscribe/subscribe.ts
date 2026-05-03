@@ -34,21 +34,24 @@ Page({
 
   onSubscribe() {
     const code = this.data.user?.invite_code;
-    const paid = this.data.user?.is_paid;
     if (!code) {
       wx.showToast({ title: '请重新登录后再试', icon: 'none' });
       return;
     }
-    wx.showModal({
-      title: paid ? '续费' : '即将上线',
-      content: paid
-        ? `微信联系 UnheardBili 续费\n你的开通码：${code}\n转账后 24h 内手动续期。`
-        : `微信支付正在接入，期间联系运营手动开通：\n\n1. 微信联系 UnheardBili\n2. 告知开通码：${code}\n3. 转账 ¥20 → 24h 内开通`,
-      confirmText: '复制开通码',
-      cancelText: '关闭',
-      confirmColor: '#1f1f1c',
-      success: (r) => {
-        if (r.confirm) this.copyCode();
+    // 一键复制运营微信号，引导去 WeChat 加好友
+    wx.setClipboardData({
+      data: 'UnheardBili',
+      success: () => {
+        wx.showModal({
+          title: '微信号已复制',
+          content: `微信号 UnheardBili 已复制到剪贴板。\n打开微信搜索 → 加好友 → 发送你的开通码：${code}\n转账 ¥20 → 24h 内开通。`,
+          confirmText: '复制开通码',
+          cancelText: '知道了',
+          confirmColor: '#1f1f1c',
+          success: (r) => {
+            if (r.confirm) this.copyCode();
+          },
+        });
       },
     });
   },

@@ -23,6 +23,16 @@ export interface AppConfig {
     bindWindowDays: number;
   };
   dailyLimit: { free: number; paid: number };
+  subscription: { amountCents: number; periodDays: number };
+  wxpay: {
+    mode: 'mock' | 'real';
+    appid: string;
+    mchid: string;
+    apiV3Key: string;
+    certSerial: string;
+    privateKeyPath: string;
+    notifyUrl: string;
+  };
 }
 
 const VALID_PROVIDERS: LLMProviderName[] = [
@@ -57,6 +67,13 @@ export function loadConfig(): AppConfig {
 
   const isCloudBase = provider.startsWith('cloudbase-');
 
+  const wxpayMode = (process.env.WXPAY_MODE ?? 'mock') as 'mock' | 'real';
+  if (wxpayMode === 'real') {
+    for (const k of ['WXPAY_APPID','WXPAY_MCHID','WXPAY_API_V3_KEY','WXPAY_CERT_SERIAL','WXPAY_PRIVATE_KEY_PATH','WXPAY_NOTIFY_URL']) {
+      if (!process.env[k]) throw new Error(`WXPAY_MODE=real but missing env: ${k}`);
+    }
+  }
+
   return {
     nodeEnv: process.env.NODE_ENV ?? 'development',
     port: Number(process.env.PORT ?? 3000),
@@ -78,6 +95,19 @@ export function loadConfig(): AppConfig {
     dailyLimit: {
       free: Number(process.env.DAILY_LIMIT_FREE ?? process.env.DAILY_QUOTA ?? 10),
       paid: Number(process.env.DAILY_LIMIT_PAID ?? 30),
+    },
+    subscription: {
+      amountCents: Number(process.env.SUBSCRIPTION_AMOUNT_CENTS ?? 2000),
+      periodDays: Number(process.env.SUBSCRIPTION_PERIOD_DAYS ?? 30),
+    },
+    wxpay: {
+      mode: wxpayMode,
+      appid: process.env.WXPAY_APPID ?? '',
+      mchid: process.env.WXPAY_MCHID ?? '',
+      apiV3Key: process.env.WXPAY_API_V3_KEY ?? '',
+      certSerial: process.env.WXPAY_CERT_SERIAL ?? '',
+      privateKeyPath: process.env.WXPAY_PRIVATE_KEY_PATH ?? '',
+      notifyUrl: process.env.WXPAY_NOTIFY_URL ?? '',
     },
   };
 }

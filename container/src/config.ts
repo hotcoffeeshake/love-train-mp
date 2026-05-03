@@ -33,6 +33,7 @@ export interface AppConfig {
     privateKeyPath: string;
     notifyUrl: string;
   };
+  admin: { token: string; uiPathSegment: string };
 }
 
 const VALID_PROVIDERS: LLMProviderName[] = [
@@ -108,6 +109,10 @@ export function loadConfig(): AppConfig {
       certSerial: process.env.WXPAY_CERT_SERIAL ?? '',
       privateKeyPath: process.env.WXPAY_PRIVATE_KEY_PATH ?? '',
       notifyUrl: process.env.WXPAY_NOTIFY_URL ?? '',
+    },
+    admin: {
+      token: process.env.ADMIN_TOKEN ?? '',
+      uiPathSegment: process.env.ADMIN_UI_PATH_SEGMENT ?? 'ui-x9k2',
     },
   };
 }

@@ -4,7 +4,9 @@ import Fastify, { type FastifyRequest } from 'fastify';
 import { loadConfig } from './config.js';
 import { connectCloudBase, connectMongo } from './db/mongo.js';
 import { createProvider } from './llm/index.js';
+import { adminAuthPlugin } from './middleware/admin.js';
 import { openidPlugin } from './middleware/openid.js';
+import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { chatRoutes } from './routes/chat.js';
 import { debugRoutes } from './routes/debug.js';
@@ -57,6 +59,8 @@ async function main() {
     keyGenerator: (req: FastifyRequest) => (req.headers['x-wx-openid'] as string) || req.ip,
   });
   await app.register(openidPlugin);
+  // CRITICAL ORDER: register adminAuthPlugin BEFORE adminRoutes (and BEFORE any other /admin/* register)
+  await app.register(adminAuthPlugin, { token: cfg.admin.token, uiPathSegment: cfg.admin.uiPathSegment });
 
   const llm = createProvider(cfg);
 
@@ -68,6 +72,7 @@ async function main() {
   await app.register(paymentRoutes(cfg));
   await app.register(wxpayRoutes(cfg));
   await app.register(debugRoutes(cfg));
+  await app.register(adminRoutes(cfg));
 
   await app.listen({ port: cfg.port, host: '0.0.0.0' });
   app.log.info(`love-train-mp listening on ${cfg.port}, provider=${cfg.llm.provider}`);

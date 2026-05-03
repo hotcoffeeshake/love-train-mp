@@ -178,7 +178,7 @@ Expected: FAIL with "Cannot find module ... invite-code.js"
 // container/src/utils/invite-code.ts
 import { randomBytes } from 'node:crypto';
 
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 chars; excludes 0/O/1/I/L
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 chars; excludes 0/O/1/I (L kept — not commonly confused)
 const LEN = 6;
 
 export function generateInviteCode(): string {

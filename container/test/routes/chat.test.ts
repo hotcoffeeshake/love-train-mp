@@ -44,7 +44,15 @@ beforeEach(async () => {
 function buildApp(llm: FakeLLM) {
   const app = Fastify();
   app.register(openidPlugin);
-  app.register(chatRoutes({ dailyQuota: 10 } as any, llm));
+  app.register(
+    chatRoutes(
+      {
+        dailyQuota: 10, // legacy, still read in some places
+        dailyLimit: { free: 10, paid: 30 },
+      } as any,
+      llm,
+    ),
+  );
   return app;
 }
 
@@ -123,5 +131,71 @@ describe('POST /chat', () => {
       payload: { messages: [] },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+import { bindInviter, getOrCreateUser } from '../../src/db/users.js';
+
+describe('POST /chat with bonus_balance', () => {
+  it('consumes bonus_balance before daily quota', async () => {
+    const llm = new FakeLLM();
+    llm.mockReply = 'ok';
+    const app = buildApp(llm);
+    // Seed user with bonus_balance=2 via bind
+    await getOrCreateUser('oI');
+    await getOrCreateUser('oA');
+    await bindInviter({
+      inviteeOpenid: 'oA',
+      inviterOpenid: 'oI',
+      inviteeReward: 2,
+      inviterReward: 0,
+    });
+    // First call should consume bonus, daily_usage stays 0
+    await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { 'x-wx-openid': 'oA' },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
+    });
+    const { getUsage } = await import('../../src/db/quota.js');
+    const { todayBeijing } = await import('../../src/utils/date.js');
+    expect(await getUsage('oA', todayBeijing())).toBe(0);
+    const u = await getOrCreateUser('oA');
+    expect(u.bonus_balance).toBe(1); // 2 - 1
+  });
+
+  it('falls back to daily_usage after bonus exhausted', async () => {
+    const llm = new FakeLLM();
+    const app = buildApp(llm);
+    // user with no bonus
+    await getOrCreateUser('oNoB');
+    await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { 'x-wx-openid': 'oNoB' },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
+    });
+    const { getUsage } = await import('../../src/db/quota.js');
+    const { todayBeijing } = await import('../../src/utils/date.js');
+    expect(await getUsage('oNoB', todayBeijing())).toBe(1);
+  });
+
+  it('uses paid daily limit when paid_until > now', async () => {
+    const llm = new FakeLLM();
+    const app = buildApp(llm);
+    await getOrCreateUser('oP');
+    const { setPaidUntil } = await import('../../src/db/users.js');
+    await setPaidUntil('oP', new Date(Date.now() + 86400_000));
+    // Pre-fill 10 daily usage; should still be allowed because limit=30
+    const { incrementUsage } = await import('../../src/db/quota.js');
+    const { todayBeijing } = await import('../../src/utils/date.js');
+    for (let i = 0; i < 10; i += 1) await incrementUsage('oP', todayBeijing());
+    const res = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { 'x-wx-openid': 'oP' },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
+    });
+    expect(res.statusCode).toBe(200);
   });
 });

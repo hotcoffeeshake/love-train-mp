@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import type { AppConfig } from '../config.js';
 import { getUsage, incrementUsage } from '../db/quota.js';
-import { getOrCreateUser, incrementTotalUses } from '../db/users.js';
+import { decrementBonusAtomic, getOrCreateUser, incrementTotalUses } from '../db/users.js';
 import { stripMarkdown } from '../llm/strip-markdown.js';
 import type { ChatMessage, LLMProvider } from '../llm/types.js';
 import { ocrImageBase64 } from '../ocr/tencent-ocr.js';
@@ -87,8 +87,7 @@ async function streamingHandler(
   messages: ChatMessage[],
   cfg: AppConfig,
   openid: string,
-  beforeCommit: () => Promise<void>,
-  remainingAfter: number,
+  beforeCommit: () => Promise<number>,
 ): Promise<void> {
   reply.raw.writeHead(200, {
     'Content-Type': 'text/plain; charset=utf-8',
@@ -122,8 +121,8 @@ async function streamingHandler(
     reply.raw.write(ndjson({ type: 'warning', message: '此回复部分内容已被过滤' }));
   }
 
-  await beforeCommit();
-  reply.raw.write(ndjson({ type: 'done', remainingUses: remainingAfter }));
+  const remainingUses = await beforeCommit();
+  reply.raw.write(ndjson({ type: 'done', remainingUses }));
   reply.raw.end();
 }
 
@@ -136,14 +135,17 @@ export const chatRoutes =
         return reply.code(400).send({ error: 'INVALID_BODY', message: 'messages required' });
       }
 
-      await getOrCreateUser(req.openid, req.unionid);
+      const user = await getOrCreateUser(req.openid, req.unionid);
+      const isPaid = !!(user.paid_until && user.paid_until.getTime() > Date.now());
+      const limit = isPaid ? cfg.dailyLimit.paid : cfg.dailyLimit.free;
 
       const date = todayBeijing();
       const used = await getUsage(req.openid, date);
-      if (used >= cfg.dailyQuota) {
+      const bonusAvail = (user.bonus_balance ?? 0) > 0;
+      if (!bonusAvail && used >= limit) {
         return reply.code(429).send({
           error: 'RATE_LIMIT',
-          message: `Daily quota ${cfg.dailyQuota} exceeded`,
+          message: `Daily quota ${limit} exceeded`,
           remainingUses: 0,
         });
       }
@@ -154,10 +156,15 @@ export const chatRoutes =
         return reply.code(400).send({ error: built.code, message: built.message });
       }
 
-      const remainingAfter = Math.max(0, cfg.dailyQuota - used - 1);
-      const commit = async () => {
-        await incrementUsage(req.openid, date);
+      // commit returns the post-commit remainingUses (today's daily remaining only;
+      // bonus_balance is rendered separately on the client via /auth/me).
+      const commit = async (): Promise<number> => {
+        let bonusConsumed = false;
+        if (bonusAvail) bonusConsumed = await decrementBonusAtomic(req.openid);
+        if (!bonusConsumed) await incrementUsage(req.openid, date);
         await incrementTotalUses(req.openid);
+        const usedAfter = await getUsage(req.openid, date);
+        return Math.max(0, limit - usedAfter);
       };
 
       if (body.stream === false) {
@@ -173,11 +180,11 @@ export const chatRoutes =
           content = '回复内容被审核拦截，请换个角度问问';
         }
         content = stripMarkdown(content);
-        await commit();
-        return { content, remainingUses: remainingAfter };
+        const remainingUses = await commit();
+        return { content, remainingUses };
       }
 
       // stream=true 默认走流式
-      await streamingHandler(reply, llm, built.messages, cfg, req.openid, commit, remainingAfter);
+      await streamingHandler(reply, llm, built.messages, cfg, req.openid, commit);
     });
   };

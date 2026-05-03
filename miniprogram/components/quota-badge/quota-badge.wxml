@@ -1,4 +1,9 @@
-<view class="badge">
-  <text>今日 {{remaining}}/{{limit}}</text>
+<view class="quota">
+  <text class="label">今日</text>
+  <view class="rule-group">
+    <text class="num">{{remaining}}</text>
+    <view class="rule"></view>
+    <text class="num mute">{{limit}}</text>
+  </view>
   <text wx:if="{{bonus > 0}}" class="bonus">＋奖励 {{bonus}}</text>
 </view>

@@ -1,27 +1,36 @@
-<view class="container">
+<view class="page">
+  <!-- Hero -->
   <view class="hero">
-    <view class="logo">♡</view>
-    <view class="title">love-train</view>
-    <view class="subtitle">童锦程风格 · 情感导师 AI</view>
+    <view class="mark serif-italic">l</view>
+    <view class="title serif-italic">love-train</view>
+    <view class="tagline">兄弟，遇到什么情况了，\n发给我看看。</view>
   </view>
 
-  <view class="form">
+  <!-- CTA -->
+  <view class="cta safe-bottom">
     <button
-      class="btn-primary"
+      class="btn-login"
       disabled="{{!agreed || loading}}"
       loading="{{loading}}"
       bindtap="onLogin">
-      {{loading ? '登录中...' : '微信一键登录'}}
+      <text class="btn-mark" wx:if="{{!loading}}">✓</text>
+      <text>{{loading ? '登录中…' : '微信一键登录'}}</text>
     </button>
 
     <view wx:if="{{errorMsg}}" class="error">{{errorMsg}}</view>
 
     <view class="agree" bindtap="onToggleAgree">
-      <view class="checkbox {{agreed ? 'on' : ''}}">{{agreed ? '✓' : ''}}</view>
+      <view class="checkbox {{agreed ? 'on' : ''}}">
+        <text wx:if="{{agreed}}">✓</text>
+      </view>
       <view class="agree-text">
-        我已阅读并同意
-        <text class="link" catchtap="onAbout">《用户协议》《隐私协议》</text>
+        已阅读并同意
+        <text class="link" catchtap="onAbout">《用户协议》</text>
+        与
+        <text class="link" catchtap="onAbout">《隐私政策》</text>
       </view>
     </view>
+
+    <view class="footer">出品 · ESCAPE STUDIO</view>
   </view>
 </view>

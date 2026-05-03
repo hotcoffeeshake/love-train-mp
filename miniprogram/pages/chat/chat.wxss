@@ -2,56 +2,61 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #f5f5f7;
+  background: #f7f3ec;
 }
 
+/* 顶栏：米白底 + 下边线 */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24rpx 32rpx;
-  background: #fff;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
+  padding: 20rpx 32rpx;
+  background: #f7f3ec;
+  border-bottom: 1rpx solid #e2dccc;
 }
 
-.user {
-  display: flex;
-  align-items: center;
-}
-
-.avatar {
-  width: 64rpx;
-  height: 64rpx;
-  border-radius: 50%;
-  margin-right: 16rpx;
-  background: #f0f0f0;
-}
-
-.avatar-default {
-  text-align: center;
-  line-height: 64rpx;
-  font-size: 32rpx;
-  color: #999;
-}
-
-.nickname {
-  font-size: 30rpx;
-  font-weight: 500;
-}
-
-.header-right {
+.brand {
   display: flex;
   align-items: center;
   gap: 20rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.avatar {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #cc785c;
+  color: #fff;
+  text-align: center;
+  line-height: 72rpx;
+  font-size: 44rpx;
+  flex-shrink: 0;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f1f1c;
+  line-height: 1.2;
 }
 
 .more {
-  padding: 0 20rpx;
-  font-size: 40rpx;
-  color: #888;
+  padding: 0 16rpx;
+  font-size: 36rpx;
+  color: #5d5b56;
   letter-spacing: -4rpx;
 }
 
+/* 消息区 */
 .list {
   flex: 1;
   overflow: hidden;
@@ -59,97 +64,143 @@
 
 .empty {
   text-align: center;
-  color: #888;
-  padding: 120rpx 32rpx;
-  font-size: 28rpx;
+  color: #5d5b56;
+  padding: 160rpx 48rpx;
 }
 
+.empty-line {
+  font-size: 30rpx;
+  color: #1f1f1c;
+  margin-bottom: 12rpx;
+  line-height: 1.5;
+}
+
+.empty-sub {
+  font-size: 24rpx;
+  color: #5d5b56;
+  line-height: 1.5;
+}
+
+/* 输入区 */
 .composer {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 16rpx;
-  padding: 20rpx 32rpx;
-  background: #fff;
-  border-top: 1rpx solid #eee;
+  padding: 16rpx 24rpx;
+  background: #f7f3ec;
+  border-top: 1rpx solid #e2dccc;
 }
 
 .input {
   flex: 1;
-  height: 80rpx;
-  padding: 0 28rpx;
-  background: #f5f5f7;
-  border-radius: 999rpx;
+  min-height: 72rpx;
+  max-height: 240rpx;
+  padding: 18rpx 28rpx;
+  background: #efe9dd;
+  border: 1rpx solid #e2dccc;
+  border-radius: 24rpx;
+  font-size: 30rpx;
+  line-height: 1.5;
+  color: #1f1f1c;
+  box-sizing: border-box;
+}
+
+.input-ph {
+  color: #5d5b56;
   font-size: 30rpx;
 }
 
+/* 发送按钮：橙色圆形 */
 .send {
-  min-width: 140rpx;
-  height: 80rpx !important;
-  line-height: 80rpx !important;
-  padding: 0 32rpx;
-  font-size: 28rpx !important;
-}
-
-.clear-wrap {
-  position: absolute;
-  right: 32rpx;
-  bottom: 160rpx;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  padding: 12rpx 24rpx;
-  border-radius: 999rpx;
-  font-size: 24rpx;
-}
-
-.add-btn {
-  width: 64rpx;
-  height: 64rpx;
-  line-height: 60rpx;
+  width: 72rpx;
+  height: 72rpx;
+  line-height: 68rpx;
   text-align: center;
-  border: 2rpx solid #ccc;
+  border-radius: 50%;
+  background: #cc785c;
+  color: #fff;
+  font-size: 36rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.send-disabled {
+  background: #d6d6d6;
+  color: #fafafa;
+}
+
+/* + 按钮：米白圆形 */
+.add-btn {
+  width: 72rpx;
+  height: 72rpx;
+  line-height: 68rpx;
+  text-align: center;
+  border: 1rpx solid #e2dccc;
   border-radius: 50%;
   font-size: 36rpx;
-  color: #666;
+  color: #1f1f1c;
+  background: transparent;
   flex-shrink: 0;
 }
 
 .add-btn-loading {
-  color: #999;
-  font-size: 22rpx;
+  color: #5d5b56;
+  font-size: 24rpx;
 }
 
+/* 待发送图片 */
 .pending-images {
   display: flex;
-  gap: 12rpx;
-  padding: 12rpx 32rpx;
-  background: #fff;
-  border-top: 1rpx solid #eee;
+  gap: 16rpx;
+  padding: 16rpx 32rpx;
+  background: #f7f3ec;
+  border-top: 1rpx solid #e2dccc;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .pending-thumb {
   position: relative;
-  width: 120rpx;
-  height: 120rpx;
+  width: 112rpx;
+  height: 112rpx;
 }
 
 .pending-img {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 12rpx;
-  background: #f0f0f0;
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 16rpx;
+  background: #d8cfc0;
+  border: 1rpx solid #e2dccc;
 }
 
 .remove {
   position: absolute;
-  top: -10rpx;
-  right: -10rpx;
+  top: -12rpx;
+  right: -12rpx;
   width: 36rpx;
   height: 36rpx;
   line-height: 32rpx;
   text-align: center;
-  background: #111;
+  background: #1f1f1c;
   color: #fff;
   border-radius: 50%;
-  font-size: 24rpx;
+  font-size: 22rpx;
+}
+
+.pending-hint {
+  font-size: 22rpx;
+  color: #5d5b56;
+}
+
+/* 清空聊天悬浮按钮 */
+.clear-wrap {
+  position: absolute;
+  right: 32rpx;
+  bottom: 200rpx;
+  background: #efe9dd;
+  border: 1rpx solid #e2dccc;
+  color: #5d5b56;
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
 }

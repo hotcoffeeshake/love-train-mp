@@ -6,7 +6,7 @@
 
 **Architecture:** Extend existing Fastify+CloudBase NoSQL backend with five new routes (`/invite/bind`, `/payment/create-order`, `/wxpay/notify`, `/admin/*`) and a static admin HTML page served from the same container. Reuse `db/users.ts` + `db/quota.ts` patterns; add a new `db/subscriptions.ts` module. Frontend touches three pages (chat / login / about) + quota-badge component. mock 模式让 `recordPayment` 服务函数被 `/payment/create-order` 直接调用；real 模式让 `/wxpay/notify` 解密回调后调用同一函数。
 
-**Tech Stack:** TypeScript / Fastify / vitest / mongodb-memory-server (test) / `@cloudbase/node-sdk` (prod) / `@fastify/static` / `wechatpay-node-v3-ts` / 原生小程序 WXML+TS.
+**Tech Stack:** TypeScript / Fastify / vitest / mongodb-memory-server (test) / `@cloudbase/node-sdk` (prod) / `@fastify/static` / `wechatpay-node-v3` / 原生小程序 WXML+TS.
 
 **Spec:** [`docs/specs/2026-05-03-invite-and-subscription-design.md`](../specs/2026-05-03-invite-and-subscription-design.md)
 
@@ -51,7 +51,7 @@ container/
 │   ├── services/
 │   │   ├── invite.ts                     bindInviter business logic
 │   │   ├── payment.ts                    recordPayment + WxpayClient (mock|real branch)
-│   │   └── wxpay-client.ts               wechatpay-node-v3-ts SDK wrapper, lazy init
+│   │   └── wxpay-client.ts               wechatpay-node-v3 SDK wrapper, lazy init
 │   ├── db/
 │   │   └── subscriptions.ts              subscriptions collection helpers
 │   └── utils/
@@ -77,7 +77,7 @@ container/test/
 
 ```
 container/
-├── package.json                          + @fastify/static + wechatpay-node-v3-ts
+├── package.json                          + @fastify/static + wechatpay-node-v3
 ├── src/
 │   ├── server.ts                         register new plugins/routes
 │   ├── config.ts                         + invite/payment/admin/wxpay env
@@ -178,7 +178,7 @@ Expected: FAIL with "Cannot find module ... invite-code.js"
 // container/src/utils/invite-code.ts
 import { randomBytes } from 'node:crypto';
 
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 chars; excludes 0/O/1/I/L
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 chars; excludes 0/O/1/I (L kept — not commonly confused)
 const LEN = 6;
 
 export function generateInviteCode(): string {
@@ -1638,7 +1638,7 @@ git commit -m "feat(payment): /payment/create-order with mock mode + recordPayme
 ## Task 7: `/wxpay/notify` route + real-mode wxpay client
 
 **Files:**
-- Modify: `container/package.json` (+ `wechatpay-node-v3-ts`)
+- Modify: `container/package.json` (+ `wechatpay-node-v3`)
 - Modify: `container/src/services/wxpay-client.ts` (real implementation)
 - Create: `container/src/routes/wxpay.ts`
 - Modify: `container/src/server.ts` (register wxpayRoutes; raw body for notify)
@@ -1650,7 +1650,7 @@ git commit -m "feat(payment): /payment/create-order with mock mode + recordPayme
 
 ```bash
 cd container
-npm install wechatpay-node-v3-ts@^2 --save
+npm install wechatpay-node-v3@^2 --save
 ```
 
 - [ ] **Step 2: Write failing test (with stubbed SDK)**
@@ -1827,7 +1827,7 @@ Replace `container/src/services/wxpay-client.ts`:
 import { readFileSync } from 'node:fs';
 import type { AppConfig } from '../config.js';
 // @ts-expect-error: package has CJS-style types; runtime works in NodeNext when bundled with default export.
-import WxPay from 'wechatpay-node-v3-ts';
+import WxPay from 'wechatpay-node-v3';
 import { createHash, createSign, randomBytes } from 'node:crypto';
 
 export interface WxRequestPayParams {
@@ -1926,7 +1926,7 @@ export async function verifyAndDecryptNotify(
 }
 ```
 
-> SDK API details (method names + return shapes) come from the README of `wechatpay-node-v3-ts`. If a method signature differs at install time, adjust to match the installed version's docs.
+> SDK API details (method names + return shapes) come from the README of `wechatpay-node-v3`. If a method signature differs at install time, adjust to match the installed version's docs.
 
 - [ ] **Step 8: Run all tests**
 

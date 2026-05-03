@@ -75,7 +75,8 @@ export type ChatChunk =
   | { type: 'delta'; text: string }
   | { type: 'done'; remainingUses: number }
   | { type: 'warning'; message: string }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'error'; code: string; message: string }
+  | { type: 'ping' };
 
 export interface StreamCallbacks {
   onDelta: (text: string) => void;
@@ -108,8 +109,14 @@ export function chatStream(
   messages: ChatMessage[],
   cb: StreamCallbacks,
 ): { abort: () => void } {
+  // 版本标记 —— 在 console 里能看到 API_VER=v4 说明跑的是最新代码（关闭 enableChunked）
+  console.log('[lt] chatStream API_VER=v4-no-chunked');
   let buffer = '';
   let aborted = false;
+  // 标记是否已经走过 chunk 路径。用来避免 onChunkReceived 已经处理完之后，
+  // success 回调再用 fallback 解析空 / 残缺的 res.data，重复触发 onDone(0)。
+  let chunkPathActive = false;
+  let doneFired = false;
 
   const handleChunk = (jsonLine: string) => {
     const trimmed = jsonLine.trim();
@@ -121,9 +128,13 @@ export function chatStream(
       return;
     }
     if (obj.type === 'delta') cb.onDelta(obj.text);
-    else if (obj.type === 'done') cb.onDone(obj.remainingUses);
+    else if (obj.type === 'done') {
+      doneFired = true;
+      cb.onDone(obj.remainingUses);
+    }
     else if (obj.type === 'warning') cb.onWarning?.(obj.message);
     else if (obj.type === 'error') cb.onError(obj.code, obj.message);
+    // 'ping' 心跳忽略
   };
 
   const task = wx.cloud.callContainer({
@@ -134,14 +145,36 @@ export function chatStream(
       'content-type': 'application/json',
     },
     data: { messages, stream: true },
-    // 注：wx.cloud.callContainer 在多数基础库版本下不真正走 chunked 流式，
-    // 这里关掉 enableChunked，让框架等收完整段 NDJSON 一次性回调，避免渲染卡死。
-    timeout: 60000,
+    // 注：wx.cloud.callContainer 在当前基础库（3.15.x）下，enableChunked + onChunkReceived
+    // 实测不工作：success 收到空字符串，chunks 全丢。所以关掉，让微信汇总后一次性给 string，
+    // 走 fallback 解析 NDJSON。代价是无真流式（一次性出整段），但保证能收到回复。
+    // 102002 网关空闲超时风险：单请求都是 < 30s，单实例不超时；后端仍写 ndjson 但 WX 会 buffer。
+    timeout: 90000,
     success: (res: ICloud.CallContainerResult) => {
+      const dataPreview =
+        typeof res.data === 'string'
+          ? `len=${(res.data as string).length} head=${(res.data as string).slice(0, 200)}`
+          : res.data instanceof ArrayBuffer
+            ? `arrayBuffer byteLen=${(res.data as ArrayBuffer).byteLength}`
+            : JSON.stringify(res.data).slice(0, 200);
+      console.log('[lt] success fired chunkPathActive=', chunkPathActive, 'doneFired=', doneFired, 'statusCode=', res.statusCode, 'dataType=', typeof res.data, 'preview:', dataPreview);
       if (aborted) return;
       if (res.statusCode >= 400) {
         const data = (res.data as { error?: string; message?: string }) || {};
         cb.onError(data.error ?? `HTTP_${res.statusCode}`, data.message ?? '请求失败');
+        return;
+      }
+
+      // 关键：只要 chunk 路径激活过，就由 chunk 路径独占处理。
+      // 否则 success 回调会用一个空 / 残缺的 res.data 二次调用 onDone(0)，把配额清零。
+      // （即使 doneFired 还没触发也跳过——'done' 行马上会从最后一个 chunk 里来。）
+      if (chunkPathActive) {
+        // 兜底：万一 chunk 路径漏了 'done'，给个超时清 sending 状态
+        if (!doneFired) {
+          setTimeout(() => {
+            if (!doneFired && !aborted) cb.onDone(-1);
+          }, 2000);
+        }
         return;
       }
 
@@ -174,7 +207,12 @@ export function chatStream(
         return;
       }
       if (raw && typeof raw === 'object') {
-        const obj = raw as { content?: string; remainingUses?: number; error?: string; message?: string };
+        const obj = raw as { type?: string; content?: string; remainingUses?: number; error?: string; code?: string; message?: string };
+        // 微信把单行 NDJSON（如 {"type":"error",...}）当成 JSON object 解析时走这里
+        if (obj.type === 'error') {
+          cb.onError(obj.code ?? 'UNKNOWN', obj.message ?? '未知错误');
+          return;
+        }
         if (typeof obj.content === 'string') {
           cb.onDelta(obj.content);
           cb.onDone(typeof obj.remainingUses === 'number' ? obj.remainingUses : 0);
@@ -182,7 +220,10 @@ export function chatStream(
         }
         if (obj.error) {
           cb.onError(obj.error, obj.message ?? 'unknown error');
+          return;
         }
+        // 啥都没匹配上，至少别静默挂死
+        cb.onError('BAD_RESPONSE', '后端返回格式不识别');
       }
     },
     fail: (err: { errMsg?: string }) => {
@@ -193,8 +234,11 @@ export function chatStream(
 
   // chunked 数据流入
   if (task && typeof (task as any).onChunkReceived === 'function') {
+    console.log('[lt] onChunkReceived hook installed');
     (task as any).onChunkReceived((res: { data: ArrayBuffer }) => {
       if (aborted) return;
+      if (!chunkPathActive) console.log('[lt] FIRST chunk received, byteLen=', (res.data as ArrayBuffer).byteLength);
+      chunkPathActive = true;
       buffer += utf8Decode(res.data);
       let nl = buffer.indexOf('\n');
       while (nl >= 0) {

@@ -1,22 +1,47 @@
 <view class="page">
-  <view class="section">
-    <view class="title">love-train</view>
-    <view class="version">v{{version}}</view>
-    <view class="desc">童锦程风格的情感导师 AI。兄弟，你遇到什么情况都可以聊。</view>
+  <!-- Identity -->
+  <view class="identity">
+    <view class="logo serif-italic">l</view>
+    <view class="brand serif-italic">love-train</view>
+    <view class="version">v {{version}} · 体验版</view>
+    <view class="desc">给男性的情感咨询助手。\n把困扰发过来，给你一段不啰嗦的诊断。</view>
   </view>
 
-  <view class="section">
-    <view class="heading">用户协议</view>
-    <view class="p">本应用为情感沟通辅助工具，AI 生成内容仅供参考，不构成专业咨询意见。使用本应用需遵守微信小程序平台规范。</view>
+  <!-- Cards -->
+  <view class="cards">
+    <view class="card" bindtap="onAgreement" data-type="user">
+      <view class="dot"></view>
+      <view class="card-body">
+        <view class="card-title">用户协议</view>
+        <view class="card-meta">AI 生成内容仅供参考，不构成专业意见</view>
+      </view>
+      <view class="chevron">›</view>
+    </view>
+
+    <view class="card" bindtap="onAgreement" data-type="privacy">
+      <view class="dot"></view>
+      <view class="card-body">
+        <view class="card-title">隐私政策</view>
+        <view class="card-meta">仅收集 openid / 昵称 / 头像，聊天本地保存</view>
+      </view>
+      <view class="chevron">›</view>
+    </view>
+
+    <view class="card" bindtap="onContact">
+      <view class="dot"></view>
+      <view class="card-body">
+        <view class="card-title">联系我们</view>
+        <view class="card-meta">joshxieavalon@gmail.com</view>
+      </view>
+      <view class="chevron">›</view>
+    </view>
   </view>
 
-  <view class="section">
-    <view class="heading">隐私协议</view>
-    <view class="p">我们仅收集登录后的 openid、昵称、头像用于识别身份；聊天内容保存在你本地，不上传服务器。AI 调用请求会临时传给模型服务，不用于训练。</view>
+  <!-- Danger -->
+  <view class="danger-zone">
+    <button class="danger-btn" bindtap="onClearLocal">清空本地聊天记录</button>
+    <view class="danger-hint">聊天仅存于本机，清空后不可恢复。</view>
   </view>
 
-  <view class="section">
-    <view class="heading">联系我们</view>
-    <view class="p">反馈请发邮件到 joshxieavalon@gmail.com</view>
-  </view>
+  <view class="footer">ESCAPE STUDIO · 2026</view>
 </view>

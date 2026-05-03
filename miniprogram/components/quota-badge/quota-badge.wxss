@@ -1,9 +1,34 @@
-.badge {
-  display: inline-block;
-  padding: 4rpx 20rpx;
-  background: #f0f0f0;
-  color: #555;
-  border-radius: 999rpx;
+.quota {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 22rpx;
+  color: #5d5b56;
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  letter-spacing: 0.04em;
+}
+
+.rule-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  color: #1f1f1c;
+}
+
+.num {
   font-size: 24rpx;
-  line-height: 1.5;
+  line-height: 1;
+}
+
+.num.mute {
+  color: #5d5b56;
+}
+
+.rule {
+  width: 16rpx;
+  height: 1rpx;
+  background: #5d5b56;
 }

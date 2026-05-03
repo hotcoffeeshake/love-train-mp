@@ -1,7 +1,7 @@
 import tcb from '@cloudbase/node-sdk';
 import type { ChatMessage, LLMProvider, StreamChunkHandler } from './types.js';
 
-export type CloudBaseProviderName = 'hunyuan-exp' | 'deepseek';
+export type CloudBaseProviderName = 'hunyuan-exp' | 'deepseek' | 'deepseek-open-custom' | string;
 
 export interface CloudBaseConfig {
   envId: string;

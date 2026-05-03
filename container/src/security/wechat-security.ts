@@ -20,6 +20,24 @@ export interface SecurityCheckResult {
   reason?: string;
 }
 
+// 只在第一次报 INVALID_WX_ACCESS_TOKEN 时打完整堆栈，后续仅一行 warn，避免日志刷屏
+let warnedInvalidToken = false;
+function logSecurityFailure(api: string, err: unknown) {
+  const msg = (err as { message?: string })?.message ?? String(err);
+  if (msg.includes('INVALID_WX_ACCESS_TOKEN')) {
+    if (!warnedInvalidToken) {
+      warnedInvalidToken = true;
+      console.error(
+        `[security] ${api} 拿不到微信 access_token：请在 CloudBase 控制台 → 云托管服务 ${process.env.CLOUDBASE_SERVICE_NAME ?? 'love-train-mp3'} → 服务设置 → 开启「微信调用能力」并绑定小程序 AppID。当前先降级放行，但等于跳过内容安全审核。`,
+      );
+    } else {
+      console.warn(`[security] ${api} skipped (no wx access_token)`);
+    }
+  } else {
+    console.error(`[security] ${api} failed (degrading to allow):`, err);
+  }
+}
+
 /**
  * 文本内容安全。失败（比如未启用微信调用能力）时返回 ok=true 并打 log，避免阻塞主链路。
  */
@@ -45,7 +63,7 @@ export async function checkText(envId: string, openid: string, text: string): Pr
     }
     return { ok: true };
   } catch (err) {
-    console.error('[security] msgSecCheck failed (degrading to allow):', err);
+    logSecurityFailure('msgSecCheck', err);
     return { ok: true };
   }
 }
@@ -71,7 +89,7 @@ export async function checkImage(envId: string, openid: string, imageBase64: str
     }
     return { ok: true };
   } catch (err) {
-    console.error('[security] imgSecCheck failed (degrading to allow):', err);
+    logSecurityFailure('imgSecCheck', err);
     return { ok: true };
   }
 }

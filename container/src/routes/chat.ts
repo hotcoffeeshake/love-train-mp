@@ -97,33 +97,70 @@ async function streamingHandler(
     'X-Accel-Buffering': 'no',
   });
 
+  // 真流式：边收边发 ndjson delta，避免 HTTP 静默 → 微信网关 idle 超时（102002）。
+  // markdown 跨 chunk 风险：保留 30 字尾巴在 buffer，下一轮再尝试 flush。
   let full = '';
+  let pending = '';
+  const safeWrite = (line: string): boolean => {
+    try {
+      reply.raw.write(line);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const flushPending = (force: boolean) => {
+    if (!pending) return;
+    let cutAt = pending.lastIndexOf('\n');
+    if (cutAt < 0) {
+      if (!force && pending.length <= 30) return;
+      cutAt = force ? pending.length - 1 : pending.length - 30 - 1;
+    }
+    const prefix = pending.slice(0, cutAt + 1);
+    pending = pending.slice(cutAt + 1);
+    const text = stripMarkdown(prefix);
+    if (text) safeWrite(ndjson({ type: 'delta', text }));
+  };
+
+  // 心跳：万一首 token 来得慢，每 8s 发一个 ping 防止网关掐连接
+  let firstChunkAt = 0;
   const tLLM = Date.now();
+  const heartbeat = setInterval(() => {
+    if (firstChunkAt === 0) safeWrite(ndjson({ type: 'ping' }));
+  }, 8000);
+
   try {
     if (llm.chatStream) {
-      // 全部攒齐再清 markdown 一次性发，避免跨 chunk 的 ** 标记切断
-      full = await llm.chatStream(messages, () => {});
+      full = await llm.chatStream(messages, (chunk) => {
+        if (firstChunkAt === 0) firstChunkAt = Date.now();
+        pending += chunk;
+        flushPending(false);
+      });
     } else {
       full = await llm.chat(messages);
+      pending = full;
     }
-    full = stripMarkdown(full);
-    reply.raw.write(ndjson({ type: 'delta', text: full }));
-    console.log(`[chat] llm done ms=${Date.now() - tLLM} chars=${full.length}`);
+    flushPending(true);
+    clearInterval(heartbeat);
+    console.log(
+      `[chat] llm done ms=${Date.now() - tLLM} chars=${full.length} firstMs=${firstChunkAt ? firstChunkAt - tLLM : -1}`,
+    );
   } catch (err) {
+    clearInterval(heartbeat);
     console.error('[chat] llm failed', err);
-    reply.raw.write(ndjson({ type: 'error', code: 'LLM_FAIL', message: 'AI 响应失败，请重试' }));
+    safeWrite(ndjson({ type: 'error', code: 'LLM_FAIL', message: 'AI 响应失败，请重试' }));
     reply.raw.end();
     return;
   }
 
-  // AI 输出内容安全
+  // AI 输出内容安全（对全文做一次）
   const safe = await checkText(cfg.cloudbaseEnvId, openid, full);
   if (!safe.ok) {
-    reply.raw.write(ndjson({ type: 'warning', message: '此回复部分内容已被过滤' }));
+    safeWrite(ndjson({ type: 'warning', message: '此回复部分内容已被过滤' }));
   }
 
   await beforeCommit();
-  reply.raw.write(ndjson({ type: 'done', remainingUses: remainingAfter }));
+  safeWrite(ndjson({ type: 'done', remainingUses: remainingAfter }));
   reply.raw.end();
 }
 

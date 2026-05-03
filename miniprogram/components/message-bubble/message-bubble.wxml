@@ -1,16 +1,24 @@
 <view class="row row-{{role}}">
-  <view class="bubble bubble-{{role}}">
-    <view wx:if="{{fileIDs.length > 0}}" class="images">
-      <image
-        wx:for="{{fileIDs}}"
-        wx:key="*this"
-        class="thumb"
-        mode="aspectFill"
-        src="{{item}}"
-        data-idx="{{index}}"
-        bindtap="onPreview" />
+  <view class="msg-col">
+    <!-- AI 诊断中标签：仅在 assistant + loading 时显示 -->
+    <view wx:if="{{role === 'assistant' && loading}}" class="ai-tag">
+      <view class="dot"></view>
+      <text>诊断中</text>
     </view>
-    <text wx:if="{{content}}" class="text">{{content}}</text>
-    <text wx:if="{{loading}}" class="caret">▍</text>
+
+    <view class="bubble bubble-{{role}}">
+      <view wx:if="{{fileIDs.length > 0}}" class="images">
+        <image
+          wx:for="{{fileIDs}}"
+          wx:key="*this"
+          class="thumb"
+          mode="aspectFill"
+          src="{{item}}"
+          data-idx="{{index}}"
+          bindtap="onPreview" />
+      </view>
+      <text wx:if="{{content}}" class="text">{{content}}</text>
+      <text wx:if="{{loading}}" class="caret">▍</text>
+    </view>
   </view>
 </view>

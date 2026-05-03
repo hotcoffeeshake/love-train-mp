@@ -1,40 +1,78 @@
-.container {
+.page {
   min-height: 100vh;
-  padding: 0 48rpx;
+  background: #f7f3ec;
   display: flex;
   flex-direction: column;
-  justify-content: center;
 }
 
 .hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 80rpx;
   text-align: center;
-  margin-bottom: 120rpx;
+  /* 视觉中心略上移 */
+  transform: translateY(-40rpx);
 }
 
-.logo {
-  font-size: 140rpx;
-  color: #111;
+.mark {
+  font-size: 280rpx;
+  line-height: 1;
+  color: #cc785c;
+  margin-bottom: 48rpx;
 }
 
 .title {
-  font-size: 56rpx;
-  font-weight: 600;
-  margin-top: 20rpx;
+  font-size: 64rpx;
+  line-height: 1.1;
+  color: #1f1f1c;
+  margin-bottom: 32rpx;
 }
 
-.subtitle {
-  color: #888;
-  margin-top: 12rpx;
-  font-size: 28rpx;
+.tagline {
+  font-size: 30rpx;
+  color: #5d5b56;
+  line-height: 1.6;
+  white-space: pre-line;
+  max-width: 520rpx;
 }
 
-.form {
+.cta {
+  padding: 0 48rpx 48rpx;
+}
+
+.btn-login {
   width: 100%;
+  height: 104rpx;
+  border: none;
+  border-radius: 24rpx;
+  background: #1f1f1c;
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+}
+
+.btn-login[disabled] {
+  background: #9a9a9a;
+  color: #fafafa;
+}
+
+.btn-mark {
+  color: #7BCE7B;
+  font-size: 36rpx;
+  font-weight: 700;
 }
 
 .error {
   margin-top: 24rpx;
-  color: #e02020;
+  color: #8b3a3a;
   font-size: 26rpx;
   text-align: center;
 }
@@ -42,30 +80,47 @@
 .agree {
   margin-top: 40rpx;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  font-size: 26rpx;
-  color: #888;
+  font-size: 24rpx;
+  color: #5d5b56;
+  line-height: 1.5;
+  padding: 0 16rpx;
+  gap: 16rpx;
 }
 
 .checkbox {
-  width: 32rpx;
-  height: 32rpx;
-  margin-right: 12rpx;
-  border: 2rpx solid #bbb;
-  border-radius: 8rpx;
+  width: 28rpx;
+  height: 28rpx;
+  flex-shrink: 0;
+  margin-top: 4rpx;
+  border: 1rpx solid #5d5b56;
   text-align: center;
-  line-height: 28rpx;
-  font-size: 24rpx;
+  line-height: 24rpx;
+  font-size: 20rpx;
   color: #fff;
+  background: transparent;
 }
 
 .checkbox.on {
-  background: #111;
-  border-color: #111;
+  background: #cc785c;
+  border-color: #cc785c;
+}
+
+.agree-text {
+  flex: 1;
 }
 
 .link {
-  color: #111;
+  color: #1f1f1c;
   text-decoration: underline;
+  text-underline-offset: 2rpx;
+}
+
+.footer {
+  margin-top: 48rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #5d5b56;
+  letter-spacing: 0.08em;
 }

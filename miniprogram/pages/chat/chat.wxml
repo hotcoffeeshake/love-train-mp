@@ -1,14 +1,13 @@
 <view class="page">
   <view class="header">
-    <view class="user">
-      <image class="avatar" wx:if="{{user.avatarUrl}}" src="{{user.avatarUrl}}" />
-      <view class="avatar avatar-default" wx:else>♡</view>
-      <view class="nickname">{{user.nickname || '我'}}</view>
+    <view class="brand">
+      <view class="avatar serif-italic">l</view>
+      <view class="brand-text">
+        <view class="name">love-train</view>
+        <quota-badge remaining="{{user.remainingUses}}" limit="10" />
+      </view>
     </view>
-    <view class="header-right">
-      <quota-badge remaining="{{user.remainingUses}}" limit="10" />
-      <view class="more" bindtap="onAbout">···</view>
-    </view>
+    <view class="more" bindtap="onAbout">···</view>
   </view>
 
   <scroll-view
@@ -17,7 +16,8 @@
     scroll-into-view="{{scrollToId}}"
     scroll-with-animation>
     <view wx:if="{{messages.length === 0}}" class="empty">
-      兄弟，你遇到什么情况了？发给我看看
+      <view class="empty-line">兄弟，把你那情况发我看看。</view>
+      <view class="empty-sub">文字、聊天截图、对方主页都行。</view>
     </view>
     <message-bubble
       wx:for="{{messages}}"
@@ -35,29 +35,32 @@
       <image src="{{item}}" mode="aspectFill" class="pending-img" />
       <view class="remove" data-idx="{{index}}" bindtap="onRemoveImage">×</view>
     </view>
+    <view class="pending-hint">{{pendingFileIDs.length}} 张图片待发送</view>
   </view>
 
   <view class="composer safe-bottom">
     <view
       class="add-btn {{uploadingImages ? 'add-btn-loading' : ''}}"
       bindtap="onPickImages">
-      {{uploadingImages ? '...' : '+'}}
+      {{uploadingImages ? '…' : '+'}}
     </view>
-    <input
+    <textarea
       class="input"
-      placeholder="{{quotaExhausted ? '今日 10 次已用完' : '说点什么...'}}"
+      placeholder="{{quotaExhausted ? '今日 10 次已用完' : '说点什么…'}}"
+      placeholder-class="input-ph"
       value="{{draft}}"
       disabled="{{quotaExhausted}}"
-      confirm-type="send"
-      bindinput="onInput"
-      bindconfirm="onSend" />
-    <button
-      class="btn-primary send"
-      disabled="{{sending || (!draft.length && pendingFileIDs.length === 0) || quotaExhausted}}"
-      loading="{{sending}}"
+      auto-height
+      maxlength="-1"
+      cursor-spacing="20"
+      show-confirm-bar="{{false}}"
+      adjust-position="{{true}}"
+      bindinput="onInput" />
+    <view
+      class="send {{(sending || (!draft.length && pendingFileIDs.length === 0) || quotaExhausted) ? 'send-disabled' : ''}}"
       bindtap="onSend">
-      发送
-    </button>
+      {{sending ? '…' : '↑'}}
+    </view>
   </view>
 
   <view class="clear-wrap" bindtap="onClearHistory" wx:if="{{messages.length > 0}}">

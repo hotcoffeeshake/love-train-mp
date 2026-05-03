@@ -2,7 +2,8 @@
   "pages": ["pages/login/login", "pages/chat/chat", "pages/about/about"],
   "window": {
     "backgroundTextStyle": "light",
-    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f7f3ec",
+    "navigationBarBackgroundColor": "#f7f3ec",
     "navigationBarTitleText": "love-train",
     "navigationBarTextStyle": "black"
   },

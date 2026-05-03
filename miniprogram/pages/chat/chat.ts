@@ -51,15 +51,16 @@ Page({
     if (!app.globalData.user) return;
     try {
       const q = await api.quota();
+      console.log('[lt] onShow quota refreshed=', q.remainingUses);
       const user = { ...app.globalData.user, remainingUses: q.remainingUses };
       app.setUser(user);
       this.setData({ user, quotaExhausted: q.remainingUses <= 0 });
-    } catch {
-      // 静默失败：保留老值
+    } catch (err) {
+      console.warn('[lt] onShow quota fetch failed:', err);
     }
   },
 
-  onInput(e: WechatMiniprogram.Input) {
+  onInput(e: { detail: { value: string } }) {
     const v = e.detail.value;
     this.setData({ draft: v });
     saveDraft(v);
@@ -141,18 +142,51 @@ Page({
       }));
 
     let accumulated = '';
+    // 节流 setData：真流式下 delta 频繁，每 80ms 才 flush 一次，避免渲染卡死
+    let lastFlushAt = 0;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushNow = () => {
+      lastFlushAt = Date.now();
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      this.updateAiMessage(aiId, accumulated, true);
+    };
+    const scheduleFlush = () => {
+      const since = Date.now() - lastFlushAt;
+      if (since >= 80) {
+        flushNow();
+      } else if (!flushTimer) {
+        flushTimer = setTimeout(flushNow, 80 - since);
+      }
+    };
     api.chatStream(llmMessages, {
       onDelta: (delta) => {
+        if (accumulated.length === 0) console.log('[lt] first delta arrived, len=', delta.length);
         accumulated += delta;
-        this.updateAiMessage(aiId, accumulated, true);
+        scheduleFlush();
       },
       onWarning: (msg) => {
         wx.showToast({ title: msg, icon: 'none' });
       },
       onDone: (remainingUses) => {
-        const finalText = accumulated || '...';
+        console.log('[lt] onDone called remainingUses=', remainingUses, 'accumulatedLen=', accumulated.length);
+        if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+        // 防御：如果完全没收到任何内容（流式断了或 fallback 解析失败），
+        // 不要相信 remainingUses=0，按错误处理，回滚 AI 气泡 + 不动配额
+        if (accumulated.length === 0) {
+          console.warn('[lt] empty response, treating as error');
+          const rollback = this.data.messages.filter((m) => m.id !== aiId);
+          this.setData({ messages: rollback, sending: false });
+          wx.showToast({ title: '没收到回复，再试一次', icon: 'none' });
+          return;
+        }
+        const finalText = accumulated;
         this.updateAiMessage(aiId, finalText, false);
         appendHistory(user.openid, { role: 'assistant', content: finalText });
+        // remainingUses < 0 是「未知」哨兵值（兜底场景），不要覆盖原配额
+        if (remainingUses < 0) {
+          this.setData({ sending: false });
+          return;
+        }
         const updatedUser = { ...user, remainingUses };
         app.setUser(updatedUser);
         this.setData({
@@ -162,6 +196,7 @@ Page({
         });
       },
       onError: (code, message) => {
+        if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
         let errText = '网络开小差，再试一次';
         if (code === 'RATE_LIMIT') errText = '今日 10 次已用完，明天再来';
         else if (code === 'UNSAFE_CONTENT') errText = '消息含敏感内容，换个说法';

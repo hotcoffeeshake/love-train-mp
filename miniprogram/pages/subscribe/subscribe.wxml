@@ -53,9 +53,7 @@
 
   <!-- CTA -->
   <view class="cta-wrap">
-    <button class="cta" bindtap="onSubscribe">
-      {{user.is_paid ? '续费 · 联系 UnheardBili' : '即将上线 · 联系 UnheardBili 手动开通'}}
-    </button>
+    <button class="cta" bindtap="onSubscribe">即将上线，联系我们</button>
     <view class="agreement">
       正在接入微信支付 · 期间联系运营手动开通
     </view>

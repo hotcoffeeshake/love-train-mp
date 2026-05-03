@@ -10,6 +10,15 @@
     <view class="more" bindtap="onAbout">···</view>
   </view>
 
+  <!-- Invite strip -->
+  <view class="invite-strip" wx:if="{{showInviteStrip}}" bindtap="onShareInvite">
+    <view class="invite-dot"></view>
+    <view class="invite-text">
+      邀请好友 <text class="invite-sep">·</text> 双方各 <text class="invite-num">+5</text> 次免费查询
+    </view>
+    <view class="invite-arrow">→</view>
+  </view>
+
   <scroll-view
     class="list"
     scroll-y

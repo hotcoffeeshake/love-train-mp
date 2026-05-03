@@ -29,6 +29,31 @@ Page({
     remaining: 0,
     limit: 10,
     bonus: 0,
+    showInviteStrip: true,
+  },
+
+  // chat 页右上角分享 = 邀请链接
+  onShareAppMessage() {
+    const ic = this.data.user?.invite_code;
+    return {
+      title: '童锦程教你怎么搞定她',
+      path: ic ? `/pages/login/login?ic=${ic}` : '/pages/login/login',
+      imageUrl: '/assets/share-cover.png',
+    };
+  },
+
+  onShareInvite() {
+    // 点邀请条 → 提示用户用右上角分享（小程序无法主动唤起转发面板）
+    wx.showModal({
+      title: '邀请好友',
+      content: '点击右上角「···」→「转发给朋友」，对方登录后双方各 +5 次免费查询。',
+      showCancel: false,
+      confirmText: '知道了',
+    });
+  },
+
+  onUpgrade() {
+    wx.navigateTo({ url: '/pages/subscribe/subscribe' });
   },
 
   onLoad() {
@@ -219,17 +244,30 @@ Page({
       },
       onError: (code, message) => {
         if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-        let errText = '网络开小差，再试一次';
-        if (code === 'RATE_LIMIT') errText = '今日 10 次已用完，明天再来';
-        else if (code === 'UNSAFE_CONTENT') errText = '消息含敏感内容，换个说法';
-        else if (code === 'UNSAFE_IMAGE') errText = '图片不合规，请换一张';
-        else if (message) errText = message;
         const rollback = this.data.messages.filter((m) => m.id !== aiId);
         this.setData({
           messages: rollback,
           sending: false,
-          quotaExhausted: code === 'RATE_LIMIT',
+          quotaExhausted: code === 'QUOTA_EXCEEDED' || code === 'RATE_LIMIT',
         });
+        // 配额用完 → 弹 modal 引导去开通
+        if (code === 'QUOTA_EXCEEDED' || code === 'RATE_LIMIT') {
+          wx.showModal({
+            title: '今日额度用完了',
+            content: '免费版每日 10 次。开通付费版每天 30 次，没有广告。',
+            confirmText: '去开通',
+            cancelText: '先不了',
+            confirmColor: '#1f1f1c',
+            success: (r) => {
+              if (r.confirm) wx.navigateTo({ url: '/pages/subscribe/subscribe' });
+            },
+          });
+          return;
+        }
+        let errText = '网络开小差，再试一次';
+        if (code === 'UNSAFE_CONTENT') errText = '消息含敏感内容，换个说法';
+        else if (code === 'UNSAFE_IMAGE') errText = '图片不合规，请换一张';
+        else if (message) errText = message;
         wx.showToast({ title: errText, icon: 'none' });
       },
     });
@@ -244,16 +282,6 @@ Page({
 
   onAbout() {
     wx.navigateTo({ url: '/pages/about/about' });
-  },
-
-  onShareAppMessage() {
-    const ic = app.globalData.user?.invite_code;
-    return {
-      title: '童锦程教你怎么搞定她',
-      path: ic ? `/pages/login/login?ic=${ic}` : '/pages/login/login',
-      // TODO: produce assets/share-cover.png (5:4 ratio) before体验版上传
-      imageUrl: '/assets/share-cover.png',
-    };
   },
 
   async onClearHistory() {

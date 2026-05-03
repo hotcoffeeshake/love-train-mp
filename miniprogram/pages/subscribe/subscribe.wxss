@@ -1,0 +1,157 @@
+/* love-train · 会员开通 page */
+.page {
+  min-height: 100vh;
+  background: #f7f3ec;
+  display: flex;
+  flex-direction: column;
+  color: #1f1f1c;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.serif-italic {
+  font-family: 'Source Serif', 'Songti SC', serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* Hero */
+.hero {
+  padding: 64rpx 48rpx 48rpx;
+}
+.title {
+  font-size: 60rpx;
+  line-height: 1.1;
+  letter-spacing: -0.6rpx;
+  margin-bottom: 20rpx;
+}
+.rule {
+  width: 64rpx;
+  height: 2rpx;
+  background: #1f1f1c;
+  margin-bottom: 28rpx;
+}
+.subtitle {
+  font-size: 26rpx;
+  color: #5d5b56;
+  line-height: 1.5;
+}
+
+/* Plans */
+.plans {
+  padding: 0 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+.plan {
+  background: #efe9dd;
+  border: 2rpx solid #e2dccc;
+  border-radius: 24rpx;
+  padding: 32rpx 32rpx 28rpx;
+  position: relative;
+}
+.plan-highlight {
+  border: 4rpx solid #cc785c;
+}
+.plan-badge {
+  position: absolute;
+  top: -2rpx;
+  right: 28rpx;
+  background: #cc785c;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 500;
+  padding: 6rpx 20rpx;
+  border-radius: 0 0 12rpx 12rpx;
+  letter-spacing: 1rpx;
+}
+.plan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 20rpx;
+  margin-bottom: 20rpx;
+  border-bottom: 1rpx solid #e2dccc;
+}
+.plan-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1f1f1c;
+}
+.plan-price {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f1f1c;
+  font-variant-numeric: tabular-nums;
+}
+.plan-price-orange {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #cc785c;
+  font-variant-numeric: tabular-nums;
+}
+.plan-price-mute {
+  font-size: 24rpx;
+  font-weight: 400;
+  color: #5d5b56;
+}
+.plan-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.feat {
+  font-size: 26rpx;
+  color: #1f1f1c;
+  line-height: 1.5;
+  display: flex;
+  gap: 16rpx;
+  align-items: flex-start;
+}
+.feat .dot {
+  color: #5d5b56;
+  flex-shrink: 0;
+}
+
+.spacer { flex: 1; min-height: 32rpx; }
+
+/* Paid meta */
+.paid-meta {
+  text-align: center;
+  font-size: 24rpx;
+  color: #5d5b56;
+  padding: 16rpx 32rpx 0;
+}
+
+/* CTA */
+.cta-wrap {
+  padding: 48rpx 48rpx 32rpx;
+}
+.cta {
+  width: 100%;
+  height: 104rpx;
+  line-height: 104rpx;
+  background: #1f1f1c;
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 500;
+  border-radius: 24rpx;
+  letter-spacing: 1rpx;
+  border: none;
+}
+.cta::after { border: none; }
+.cta[loading]::before {
+  margin-right: 8rpx;
+}
+.agreement {
+  margin-top: 28rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #5d5b56;
+  line-height: 1.5;
+}
+.agreement .link {
+  color: #1f1f1c;
+  text-decoration: underline;
+  text-underline-offset: 2rpx;
+}

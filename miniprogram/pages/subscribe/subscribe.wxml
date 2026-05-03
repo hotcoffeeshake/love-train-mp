@@ -1,0 +1,54 @@
+<view class="page">
+  <!-- Title -->
+  <view class="hero">
+    <view class="title serif-italic">会员开通</view>
+    <view class="rule"></view>
+    <view class="subtitle">{{user.is_paid ? '当前为付费会员 · 续费可延长有效期' : '选一档适合你的'}}</view>
+  </view>
+
+  <!-- Plan cards -->
+  <view class="plans">
+    <!-- 普通会员 -->
+    <view class="plan {{user.is_paid ? '' : 'plan-current'}}">
+      <view class="plan-head">
+        <view class="plan-name">普通会员</view>
+        <view class="plan-price-mute" wx:if="{{!user.is_paid}}">当前</view>
+        <view class="plan-price" wx:else>—</view>
+      </view>
+      <view class="plan-features">
+        <view class="feat"><text class="dot">·</text><text>每日 {{freeLimit}} 次免费查询</text></view>
+        <view class="feat"><text class="dot">·</text><text>含广告</text></view>
+      </view>
+    </view>
+
+    <!-- 付费会员 -->
+    <view class="plan plan-highlight">
+      <view class="plan-badge">{{user.is_paid ? '当前' : '推荐'}}</view>
+      <view class="plan-head">
+        <view class="plan-name">付费会员</view>
+        <view class="plan-price-mute" wx:if="{{user.is_paid}}">当前</view>
+        <view class="plan-price-orange" wx:else>¥{{priceYuan}}/月</view>
+      </view>
+      <view class="plan-features">
+        <view class="feat"><text class="dot">·</text><text>每日 {{paidLimit}} 次查询</text></view>
+        <view class="feat"><text class="dot">·</text><text>无广告</text></view>
+        <view class="feat"><text class="dot">·</text><text>优先客服支持</text></view>
+      </view>
+    </view>
+  </view>
+
+  <view class="spacer"></view>
+
+  <!-- Member valid-until note (paid only) -->
+  <view class="paid-meta" wx:if="{{user.is_paid && user.paid_until}}">有效期至 {{expireText}}</view>
+
+  <!-- CTA -->
+  <view class="cta-wrap">
+    <button class="cta" bindtap="onSubscribe" loading="{{paying}}">
+      {{user.is_paid ? '续费 ¥' + priceYuan + '/月' : '开通付费版 ¥' + priceYuan + '/月'}}
+    </button>
+    <view class="agreement">
+      点击即代表同意<text class="link">《会员服务协议》</text>
+    </view>
+  </view>
+</view>

@@ -4,28 +4,18 @@
     <view class="logo serif-italic">l</view>
     <view class="brand serif-italic">love-train</view>
     <view class="version">v {{version}} · 体验版</view>
-    <view class="desc">给男性的情感咨询助手。\n把困扰发过来，给你一段不啰嗦的诊断。</view>
   </view>
 
-  <!-- 会员状态 -->
-  <view class="member-card" wx:if="{{user}}">
-    <view wx:if="{{user.is_paid}}">
-      <view class="m-title">付费会员 · 每日 {{user.today_limit}} 次</view>
-      <view class="m-meta">有效期至 {{expireText}}</view>
-      <button class="m-btn ghost" bindtap="onSubscribe" loading="{{paying}}">续费 ¥20/月</button>
+  <!-- Subscribe entry card (highlighted) -->
+  <view class="card card-accent" bindtap="onOpenSubscribe">
+    <view class="dot dot-glow"></view>
+    <view class="card-body">
+      <view class="card-title" wx:if="{{user.is_paid}}">会员中心</view>
+      <view class="card-title" wx:else>开通付费版</view>
+      <view class="card-meta" wx:if="{{user.is_paid}}">有效期至 {{expireText}} · 续费 ¥20/月</view>
+      <view class="card-meta" wx:else>每日 30 次 · 免广告</view>
     </view>
-    <view wx:else>
-      <view class="m-title">免费会员 · 每日 {{user.today_limit}} 次</view>
-      <view class="m-meta">付费版每日 30 次 · 免广告</view>
-      <button class="m-btn primary" bindtap="onSubscribe" loading="{{paying}}">开通付费版 ¥20/月</button>
-    </view>
-  </view>
-
-  <!-- 邀请好友 -->
-  <view class="invite-card" wx:if="{{user}}">
-    <view class="i-title">邀请好友 · 双方各 +5 次免费查询</view>
-    <view class="i-code">我的邀请码 <text>{{user.invite_code}}</text></view>
-    <view class="i-hint">点击右上角 ··· 转发给朋友，对方登录后自动绑定</view>
+    <view class="chevron chevron-bold">›</view>
   </view>
 
   <!-- Cards -->
@@ -34,7 +24,7 @@
       <view class="dot"></view>
       <view class="card-body">
         <view class="card-title">用户协议</view>
-        <view class="card-meta">AI 生成内容仅供参考，不构成专业意见</view>
+        <view class="card-meta">上次更新 2026.03</view>
       </view>
       <view class="chevron">›</view>
     </view>
@@ -43,7 +33,7 @@
       <view class="dot"></view>
       <view class="card-body">
         <view class="card-title">隐私政策</view>
-        <view class="card-meta">仅收集 openid / 昵称 / 头像，聊天本地保存</view>
+        <view class="card-meta">不收集你的聊天内容</view>
       </view>
       <view class="chevron">›</view>
     </view>
@@ -52,7 +42,7 @@
       <view class="dot"></view>
       <view class="card-body">
         <view class="card-title">联系我们</view>
-        <view class="card-meta">joshxieavalon@gmail.com</view>
+        <view class="card-meta">微信 UnheardBili</view>
       </view>
       <view class="chevron">›</view>
     </view>

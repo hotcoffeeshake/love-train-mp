@@ -12,6 +12,7 @@ import { healthRoutes } from './routes/health.js';
 import { inviteRoutes } from './routes/invite.js';
 import { paymentRoutes } from './routes/payment.js';
 import { userRoutes } from './routes/user.js';
+import { wxpayRoutes } from './routes/wxpay.js';
 
 async function main() {
   const cfg = loadConfig();
@@ -21,6 +22,20 @@ async function main() {
       transport: cfg.nodeEnv !== 'production' ? { target: 'pino-pretty' } : undefined,
     },
     bodyLimit: 5 * 1024 * 1024,
+  });
+
+  // Raw-body parser for /wxpay/notify so we can verify the WeChat Pay v3 signature
+  // against the exact bytes received. Other routes still get parsed JSON.
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    if (req.url === '/wxpay/notify') {
+      done(null, body);
+      return;
+    }
+    try {
+      done(null, JSON.parse(body as string));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
   });
 
   if (cfg.cloudbaseEnvId) {
@@ -51,6 +66,7 @@ async function main() {
   await app.register(chatRoutes(cfg, llm));
   await app.register(inviteRoutes(cfg));
   await app.register(paymentRoutes(cfg));
+  await app.register(wxpayRoutes(cfg));
   await app.register(debugRoutes(cfg));
 
   await app.listen({ port: cfg.port, host: '0.0.0.0' });

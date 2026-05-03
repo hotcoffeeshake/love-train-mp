@@ -24,6 +24,7 @@
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
     "tencentcloud-sdk-nodejs-ocr": "^4.1.218",
+    "wechatpay-node-v3": "^2.2.1",
     "wx-server-sdk": "^2.6.5"
   },
   "devDependencies": {

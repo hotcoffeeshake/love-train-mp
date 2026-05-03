@@ -1,4 +1,5 @@
 import { api } from '../../utils/api';
+import { INVITE_CODE_PATTERN } from '../../utils/consts';
 
 const app = getApp<IAppOption>();
 
@@ -9,7 +10,10 @@ Page({
     errorMsg: '',
   },
 
-  onLoad() {
+  onLoad(options: Record<string, string>) {
+    if (options?.ic && INVITE_CODE_PATTERN.test(options.ic)) {
+      try { wx.setStorageSync('pending_ic', options.ic); } catch {}
+    }
     if (app.globalData.user) {
       wx.reLaunch({ url: '/pages/chat/chat' });
     }
@@ -31,6 +35,28 @@ Page({
       const user = await api.me();
       app.setUser(user);
 
+      // Best-effort bind if there's a pending invite code
+      const pendingIc = (() => {
+        try { return wx.getStorageSync('pending_ic') as string; } catch { return ''; }
+      })();
+      if (pendingIc) {
+        try {
+          const r = await api.bindInvite(pendingIc);
+          if (r.ok) {
+            wx.showToast({ title: `已通过邀请 +${r.bonus_added} 次`, icon: 'success' });
+          }
+        } catch {
+          // failure silent — user shouldn't be blocked by inviter mishaps
+        } finally {
+          try { wx.removeStorageSync('pending_ic'); } catch {}
+        }
+        // Refresh user (bonus changed)
+        try {
+          const fresh = await api.me();
+          app.setUser(fresh);
+        } catch {}
+      }
+
       try {
         const profile = await wx.getUserProfile({ desc: '用于展示你的昵称与头像' });
         if (profile?.userInfo) {
@@ -39,7 +65,7 @@ Page({
             avatarUrl: profile.userInfo.avatarUrl,
           });
           app.setUser({
-            ...user,
+            ...app.globalData.user!,
             nickname: profile.userInfo.nickName,
             avatarUrl: profile.userInfo.avatarUrl,
           });

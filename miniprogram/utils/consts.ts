@@ -10,3 +10,6 @@ export const DEFAULT_DAILY_QUOTA = 10;
 
 // 本地历史最大条数
 export const MAX_LOCAL_HISTORY = 50;
+
+// 邀请码格式（去除 0/O/1/I 等易混淆字符的 6 位大写字母 + 数字）
+export const INVITE_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;

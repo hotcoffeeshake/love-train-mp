@@ -189,6 +189,16 @@ Page({
     wx.navigateTo({ url: '/pages/about/about' });
   },
 
+  onShareAppMessage() {
+    const ic = app.globalData.user?.invite_code;
+    return {
+      title: '童锦程教你怎么搞定她',
+      path: ic ? `/pages/login/login?ic=${ic}` : '/pages/login/login',
+      // TODO: produce assets/share-cover.png (5:4 ratio) before体验版上传
+      imageUrl: '/assets/share-cover.png',
+    };
+  },
+
   async onClearHistory() {
     const { user } = this.data;
     if (!user) return;

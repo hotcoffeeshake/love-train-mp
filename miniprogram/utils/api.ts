@@ -7,7 +7,33 @@ export interface UserInfo {
   remainingUses: number;
   totalUses: number;
   isNewUser: boolean;
+  // ── new fields (Invite + Subscription) ─────────────
+  today_limit: number;
+  is_paid: boolean;
+  paid_until: string | null;
+  invite_code: string;
+  inviter: { invite_code: string } | null;
+  bonus_balance: number;
 }
+
+export interface BindInviteResponse {
+  ok: boolean;
+  bonus_added?: number;
+  error?: string;
+}
+
+export type CreateOrderResponse =
+  | { mode: 'mock'; subscription_id: string; paid_until: string }
+  | {
+      mode: 'real';
+      wx_payment: {
+        timeStamp: string;
+        nonceStr: string;
+        package: string;
+        signType: 'RSA';
+        paySign: string;
+      };
+    };
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -222,4 +248,8 @@ export const api = {
   chat: (messages: ChatMessage[]) =>
     callBackend<ChatResponse>('/chat', 'POST', { messages, stream: false }),
   chatStream,
+  bindInvite: (code: string) =>
+    callBackend<BindInviteResponse>('/invite/bind', 'POST', { code }),
+  createOrder: (data: { months?: number }) =>
+    callBackend<CreateOrderResponse>('/payment/create-order', 'POST', data),
 };

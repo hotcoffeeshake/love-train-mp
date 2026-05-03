@@ -17,6 +17,12 @@ export interface AppConfig {
     apiUrl: string;
     model: string;
   };
+  invite: {
+    rewardInviter: number;
+    rewardInvitee: number;
+    bindWindowDays: number;
+  };
+  dailyLimit: { free: number; paid: number };
 }
 
 const VALID_PROVIDERS: LLMProviderName[] = [
@@ -63,6 +69,15 @@ export function loadConfig(): AppConfig {
       apiKey: isCloudBase ? (process.env.LLM_API_KEY ?? '') : required('LLM_API_KEY', process.env.LLM_API_KEY),
       apiUrl: process.env.LLM_API_URL ?? defaults[provider].url,
       model: process.env.LLM_MODEL ?? defaults[provider].model,
+    },
+    invite: {
+      rewardInviter: Number(process.env.INVITE_REWARD_INVITER ?? 5),
+      rewardInvitee: Number(process.env.INVITE_REWARD_INVITEE ?? 5),
+      bindWindowDays: Number(process.env.INVITE_BIND_WINDOW_DAYS ?? 7),
+    },
+    dailyLimit: {
+      free: Number(process.env.DAILY_LIMIT_FREE ?? process.env.DAILY_QUOTA ?? 10),
+      paid: Number(process.env.DAILY_LIMIT_PAID ?? 30),
     },
   };
 }

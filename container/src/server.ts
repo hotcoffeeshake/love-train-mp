@@ -42,6 +42,9 @@ async function main() {
       done(err as Error, undefined);
     }
   });
+  app.addContentTypeParser(['application/xml', 'text/xml', 'text/plain'], { parseAs: 'string' }, (_req, body, done) => {
+    done(null, body);
+  });
 
   if (cfg.cloudbaseEnvId) {
     connectCloudBase(cfg.cloudbaseEnvId);

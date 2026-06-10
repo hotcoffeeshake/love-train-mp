@@ -36,6 +36,10 @@ export const wxpayRoutes =
           out_trade_no: payload.out_trade_no,
           source: 'wxpay',
         });
+        req.log.info(
+          { out_trade_no: payload.out_trade_no, openid: payload.openid.slice(0, 8) },
+          'wxpay notify recorded',
+        );
       } catch (err) {
         req.log.error({ err }, 'wxpay notify processing failed');
         reply.code(500);

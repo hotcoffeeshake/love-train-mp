@@ -2,6 +2,7 @@ import type { AppConfig } from '../config.js';
 import { getOrCreateUser, setPaidUntil } from '../db/users.js';
 import {
   insertSubscription,
+  findSubscriptionByOutTradeNo,
   findSubscriptionByTransactionId,
   type SubscriptionSource,
 } from '../db/subscriptions.js';
@@ -37,6 +38,16 @@ export async function recordPayment(
     };
   }
 
+  const existingByOrder = await findSubscriptionByOutTradeNo(input.out_trade_no);
+  if (existingByOrder) {
+    return {
+      subscription_id: existingByOrder._id,
+      paid_until: existingByOrder.period_end,
+      rebate_status: existingByOrder.rebate_status,
+      duplicate: true,
+    };
+  }
+
   const user = await getOrCreateUser(input.openid);
   const months = input.months ?? 1;
   const periodMs = cfg.subscription.periodDays * 24 * 60 * 60 * 1000;
@@ -48,6 +59,7 @@ export async function recordPayment(
   const rebateStatus = user.inviter_openid ? 'pending' : 'none';
 
   const subInput: Parameters<typeof insertSubscription>[0] = {
+    _id: input.out_trade_no,
     openid: input.openid,
     amount: input.amount,
     paid_at: now,
@@ -61,7 +73,19 @@ export async function recordPayment(
   if (user.inviter_openid) {
     subInput.inviter_openid = user.inviter_openid;
   }
-  const _id = await insertSubscription(subInput);
+  let _id: string;
+  try {
+    _id = await insertSubscription(subInput);
+  } catch (err) {
+    const existingAfterRace = await findSubscriptionByOutTradeNo(input.out_trade_no);
+    if (!existingAfterRace) throw err;
+    return {
+      subscription_id: existingAfterRace._id,
+      paid_until: existingAfterRace.period_end,
+      rebate_status: existingAfterRace.rebate_status,
+      duplicate: true,
+    };
+  }
 
   await setPaidUntil(input.openid, end);
 

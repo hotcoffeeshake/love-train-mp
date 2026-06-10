@@ -1,4 +1,5 @@
 import { ocr } from 'tencentcloud-sdk-nodejs-ocr';
+import { getCloudBaseCredentialEnv } from '../cloudbase-credentials.js';
 
 type OcrClient = InstanceType<typeof ocr.v20181119.Client>;
 
@@ -6,14 +7,7 @@ let cached: OcrClient | null = null;
 
 function getClient(): OcrClient | null {
   if (cached) return cached;
-  // 容器里 API key 注入会写入 TENCENTCLOUD_SECRETID/SECRETKEY
-  // 同时也支持 TENCENT_SECRET_ID/KEY（与 cloudbase-adapter 一致）
-  const secretId =
-    process.env.TENCENTCLOUD_SECRETID ?? process.env.TENCENT_SECRET_ID;
-  const secretKey =
-    process.env.TENCENTCLOUD_SECRETKEY ?? process.env.TENCENT_SECRET_KEY;
-  const sessionToken =
-    process.env.TENCENTCLOUD_SESSIONTOKEN ?? process.env.TENCENT_SESSION_TOKEN;
+  const { secretId, secretKey, sessionToken } = getCloudBaseCredentialEnv();
   if (!secretId || !secretKey) {
     return null;
   }
@@ -23,6 +17,17 @@ function getClient(): OcrClient | null {
     profile: { httpProfile: { endpoint: 'ocr.tencentcloudapi.com', reqTimeout: 15 } },
   });
   return cached;
+}
+
+export function getOcrStatus() {
+  const { secretId, secretKey, sessionToken } = getCloudBaseCredentialEnv();
+  return {
+    hasTencentSecretId: Boolean(secretId),
+    hasTencentSecretKey: Boolean(secretKey),
+    hasSessionToken: Boolean(sessionToken),
+    hasCloudBaseApiKey: Boolean(process.env.CLOUDBASE_APIKEY),
+    ready: Boolean(secretId && secretKey),
+  };
 }
 
 export interface OcrDebugResult {

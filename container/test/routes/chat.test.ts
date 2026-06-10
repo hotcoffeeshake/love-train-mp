@@ -12,10 +12,16 @@ class FakeLLM implements LLMProvider {
   name = 'fake';
   lastMessages: any[] = [];
   mockReply = 'default reply';
+  mockStreamReply = 'stream reply';
 
   async chat(messages: any[]) {
     this.lastMessages = messages;
     return this.mockReply;
+  }
+
+  async chatStream(messages: any[]) {
+    this.lastMessages = messages;
+    return this.mockStreamReply;
   }
 }
 
@@ -121,6 +127,30 @@ describe('POST /chat', () => {
     expect(await getUsage('oA', todayBeijing())).toBe(0);
   });
 
+  it('falls back to stream when nonstream LLM request times out', async () => {
+    const llm = new FakeLLM();
+    llm.mockStreamReply = '流式兜底回复';
+    llm.chat = async () => {
+      const err = new Error('request timeout') as Error & { code: string };
+      err.code = 'ESOCKETTIMEDOUT';
+      throw err;
+    };
+    const app = buildApp(llm);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { 'x-wx-openid': 'oA' },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ content: '流式兜底回复', remainingUses: 9 });
+
+    const { getUsage } = await import('../../src/db/quota.js');
+    const { todayBeijing } = await import('../../src/utils/date.js');
+    expect(await getUsage('oA', todayBeijing())).toBe(1);
+  });
+
   it('rejects empty messages', async () => {
     const llm = new FakeLLM();
     const app = buildApp(llm);
@@ -132,12 +162,45 @@ describe('POST /chat', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('does not consume server quota for guest chat', async () => {
+    const llm = new FakeLLM();
+    const app = buildApp(llm);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { 'x-wx-openid': 'oGuest' },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false, guest: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ remainingUses: -1 });
+
+    const { getUsage } = await import('../../src/db/quota.js');
+    const { todayBeijing } = await import('../../src/utils/date.js');
+    expect(await getUsage('oGuest', todayBeijing())).toBe(0);
+  });
+
+  it('starts stream responses with a ping chunk', async () => {
+    const llm = new FakeLLM();
+    llm.mockReply = 'ok';
+    const app = buildApp(llm);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { 'x-wx-openid': 'oA' },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.startsWith('{"type":"ping"}\n')).toBe(true);
+  });
 });
 
 import { bindInviter, getOrCreateUser } from '../../src/db/users.js';
 
 describe('POST /chat with bonus_balance', () => {
-  it('consumes bonus_balance before daily quota', async () => {
+  it('consumes daily quota before bonus_balance', async () => {
     const llm = new FakeLLM();
     llm.mockReply = 'ok';
     const app = buildApp(llm);
@@ -150,7 +213,6 @@ describe('POST /chat with bonus_balance', () => {
       inviteeReward: 2,
       inviterReward: 0,
     });
-    // First call should consume bonus, daily_usage stays 0
     await app.inject({
       method: 'POST',
       url: '/chat',
@@ -159,9 +221,38 @@ describe('POST /chat with bonus_balance', () => {
     });
     const { getUsage } = await import('../../src/db/quota.js');
     const { todayBeijing } = await import('../../src/utils/date.js');
-    expect(await getUsage('oA', todayBeijing())).toBe(0);
+    expect(await getUsage('oA', todayBeijing())).toBe(1);
     const u = await getOrCreateUser('oA');
-    expect(u.bonus_balance).toBe(1); // 2 - 1
+    expect(u.bonus_balance).toBe(2);
+  });
+
+  it('consumes bonus_balance only after daily quota is exhausted', async () => {
+    const llm = new FakeLLM();
+    llm.mockReply = 'ok';
+    const app = buildApp(llm);
+    await getOrCreateUser('oI');
+    await getOrCreateUser('oA');
+    await bindInviter({
+      inviteeOpenid: 'oA',
+      inviterOpenid: 'oI',
+      inviteeReward: 2,
+      inviterReward: 0,
+    });
+    const { incrementUsage, getUsage } = await import('../../src/db/quota.js');
+    const { todayBeijing } = await import('../../src/utils/date.js');
+    for (let i = 0; i < 10; i += 1) await incrementUsage('oA', todayBeijing());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { 'x-wx-openid': 'oA' },
+      payload: { messages: [{ role: 'user', content: 'hi' }], stream: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(await getUsage('oA', todayBeijing())).toBe(10);
+    const u = await getOrCreateUser('oA');
+    expect(u.bonus_balance).toBe(1);
   });
 
   it('falls back to daily_usage after bonus exhausted', async () => {

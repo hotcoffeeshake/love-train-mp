@@ -29,6 +29,17 @@ describe('openidPlugin', () => {
     process.env = originalEnv;
   });
 
+  it('allows wxpay notify without openid header in prod', async () => {
+    process.env.NODE_ENV = 'production';
+    const app = Fastify();
+    await app.register(openidPlugin);
+    app.post('/wxpay/notify', async () => ({ ok: true }));
+    const res = await app.inject({ method: 'POST', url: '/wxpay/notify' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    process.env = originalEnv;
+  });
+
   it('uses dev-openid in development', async () => {
     process.env.NODE_ENV = 'development';
     const app = Fastify();

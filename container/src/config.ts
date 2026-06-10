@@ -11,12 +11,14 @@ export interface AppConfig {
   port: number;
   dailyQuota: number;
   wxAppId: string;
+  wxAppSecret: string;
   cloudbaseEnvId: string;
   llm: {
     provider: LLMProviderName;
     apiKey: string;
     apiUrl: string;
     model: string;
+    timeoutMs: number;
   };
   invite: {
     rewardInviter: number;
@@ -32,7 +34,20 @@ export interface AppConfig {
     apiV3Key: string;
     certSerial: string;
     privateKeyPath: string;
+    privateKey: string;
     notifyUrl: string;
+  };
+  virtualPayment: {
+    mode: 'mock' | 'real';
+    offerId: string;
+    appKey: string;
+    env: 0 | 1;
+    currencyType: 'CNY';
+    productId: string;
+    goodsPrice: number;
+  };
+  wechatMessage: {
+    token: string;
   };
   admin: { token: string; uiPathSegment: string };
 }
@@ -72,10 +87,17 @@ export function loadConfig(): AppConfig {
   const isCloudBase = provider.startsWith('cloudbase-');
 
   const wxpayMode = (process.env.WXPAY_MODE ?? 'mock') as 'mock' | 'real';
+  const virtualPaymentMode = (process.env.VIRTUAL_PAYMENT_MODE ?? 'mock') as 'mock' | 'real';
   if (wxpayMode === 'real') {
-    for (const k of ['WXPAY_APPID','WXPAY_MCHID','WXPAY_API_V3_KEY','WXPAY_CERT_SERIAL','WXPAY_PRIVATE_KEY_PATH','WXPAY_NOTIFY_URL']) {
+    for (const k of ['WXPAY_APPID','WXPAY_MCHID','WXPAY_API_V3_KEY','WXPAY_CERT_SERIAL','WXPAY_NOTIFY_URL']) {
       if (!process.env[k]) throw new Error(`WXPAY_MODE=real but missing env: ${k}`);
     }
+    if (!process.env.WXPAY_PRIVATE_KEY && !process.env.WXPAY_PRIVATE_KEY_BASE64 && !process.env.WXPAY_PRIVATE_KEY_PATH) {
+      throw new Error('WXPAY_MODE=real but missing env: WXPAY_PRIVATE_KEY or WXPAY_PRIVATE_KEY_BASE64 or WXPAY_PRIVATE_KEY_PATH');
+    }
+  }
+  if (!['mock', 'real'].includes(virtualPaymentMode)) {
+    throw new Error(`Invalid VIRTUAL_PAYMENT_MODE: ${virtualPaymentMode}`);
   }
 
   return {
@@ -83,6 +105,7 @@ export function loadConfig(): AppConfig {
     port: Number(process.env.PORT ?? 3000),
     dailyQuota: Number(process.env.DAILY_QUOTA ?? 10),
     wxAppId: process.env.WX_APPID ?? '',
+    wxAppSecret: process.env.WX_APPSECRET ?? '',
     cloudbaseEnvId: process.env.CLOUDBASE_ENV_ID ?? '',
     llm: {
       provider,
@@ -90,6 +113,7 @@ export function loadConfig(): AppConfig {
       apiKey: isCloudBase ? (process.env.LLM_API_KEY ?? '') : required('LLM_API_KEY', process.env.LLM_API_KEY),
       apiUrl: process.env.LLM_API_URL ?? defaults[provider].url,
       model: process.env.LLM_MODEL ?? defaults[provider].model,
+      timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 90000),
     },
     invite: {
       rewardInviter: Number(process.env.INVITE_REWARD_INVITER ?? 5),
@@ -111,7 +135,22 @@ export function loadConfig(): AppConfig {
       apiV3Key: process.env.WXPAY_API_V3_KEY ?? '',
       certSerial: process.env.WXPAY_CERT_SERIAL ?? '',
       privateKeyPath: process.env.WXPAY_PRIVATE_KEY_PATH ?? '',
+      privateKey: process.env.WXPAY_PRIVATE_KEY_BASE64
+        ? Buffer.from(process.env.WXPAY_PRIVATE_KEY_BASE64, 'base64').toString('utf8')
+        : (process.env.WXPAY_PRIVATE_KEY ?? ''),
       notifyUrl: process.env.WXPAY_NOTIFY_URL ?? '',
+    },
+    virtualPayment: {
+      mode: virtualPaymentMode,
+      offerId: process.env.VIRTUAL_PAYMENT_OFFER_ID ?? '',
+      appKey: process.env.VIRTUAL_PAYMENT_APP_KEY ?? '',
+      env: Number(process.env.VIRTUAL_PAYMENT_ENV ?? 0) === 1 ? 1 : 0,
+      currencyType: 'CNY',
+      productId: process.env.VIRTUAL_PAYMENT_PRODUCT_ID ?? '',
+      goodsPrice: Number(process.env.VIRTUAL_PAYMENT_GOODS_PRICE_CENTS ?? process.env.SUBSCRIPTION_AMOUNT_CENTS ?? 2000),
+    },
+    wechatMessage: {
+      token: process.env.WECHAT_MESSAGE_TOKEN ?? '',
     },
     admin: {
       token: process.env.ADMIN_TOKEN ?? '',

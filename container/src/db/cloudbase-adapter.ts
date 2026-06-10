@@ -1,4 +1,5 @@
 import tcb from '@cloudbase/node-sdk';
+import { applyCloudBaseCredentialEnv } from '../cloudbase-credentials.js';
 import type { Database, DbCollection, DbDocument, FindOptions, UpdateOptions, UpdateSpec } from './adapter.js';
 
 type TcbDatabase = ReturnType<ReturnType<typeof tcb.init>['database']>;
@@ -68,11 +69,7 @@ class CloudBaseCollection implements DbCollection {
 export class CloudBaseAdapter implements Database {
   private db: TcbDatabase;
   constructor(envId: string) {
-    const init: Parameters<typeof tcb.init>[0] = { env: envId };
-    if (process.env.TENCENT_SECRET_ID && process.env.TENCENT_SECRET_KEY) {
-      init.secretId = process.env.TENCENT_SECRET_ID;
-      init.secretKey = process.env.TENCENT_SECRET_KEY;
-    }
+    const init = applyCloudBaseCredentialEnv<NonNullable<Parameters<typeof tcb.init>[0]>>({ env: envId });
     const app = tcb.init(init);
     this.db = app.database();
   }

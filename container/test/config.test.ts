@@ -54,4 +54,10 @@ describe('config', () => {
     const { loadConfig } = await import('../src/config.js');
     expect(loadConfig().cloudbaseEnvId).toBe('love-train-mp-abc');
   });
+
+  it('defaults LLM timeout above CloudBase SDK 15s default', async () => {
+    delete process.env.LLM_TIMEOUT_MS;
+    const { loadConfig } = await import('../src/config.js');
+    expect(loadConfig().llm.timeoutMs).toBe(90000);
+  });
 });

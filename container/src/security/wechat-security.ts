@@ -2,15 +2,12 @@
 // 需要在云托管启用"开通微信调用能力"开关，wx-server-sdk / @cloudbase/node-sdk 才能调微信 OpenAPI。
 
 import tcb from '@cloudbase/node-sdk';
+import { applyCloudBaseCredentialEnv } from '../cloudbase-credentials.js';
 
 let app: ReturnType<typeof tcb.init> | null = null;
 function getApp(envId: string) {
   if (app) return app;
-  const init: Parameters<typeof tcb.init>[0] = { env: envId };
-  if (process.env.TENCENT_SECRET_ID && process.env.TENCENT_SECRET_KEY) {
-    init.secretId = process.env.TENCENT_SECRET_ID;
-    init.secretKey = process.env.TENCENT_SECRET_KEY;
-  }
+  const init = applyCloudBaseCredentialEnv<NonNullable<Parameters<typeof tcb.init>[0]>>({ env: envId });
   app = tcb.init(init);
   return app;
 }

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { AppConfig } from '../config.js';
-import { ocrDebug, ocrImageBase64 } from '../ocr/tencent-ocr.js';
+import { getOcrStatus, ocrDebug, ocrImageBase64 } from '../ocr/tencent-ocr.js';
 import { downloadFileAsBase64 } from '../storage/cos.js';
 
 interface DebugBody {
@@ -15,9 +15,27 @@ export const debugRoutes = (cfg: AppConfig): FastifyPluginAsync => async (app) =
       Boolean(process.env.TENCENTCLOUD_SECRETKEY || process.env.TENCENT_SECRET_KEY),
     hasSessionToken:
       Boolean(process.env.TENCENTCLOUD_SESSIONTOKEN || process.env.TENCENT_SESSION_TOKEN),
+    hasCloudBaseApiKey: Boolean(process.env.CLOUDBASE_APIKEY),
+    ocr: getOcrStatus(),
     cloudbaseEnvId: cfg.cloudbaseEnvId,
     llmProvider: cfg.llm.provider,
     llmModel: cfg.llm.model,
+    wxpay: {
+      mode: cfg.wxpay.mode,
+      hasMchid: Boolean(cfg.wxpay.mchid),
+      hasApiV3Key: Boolean(cfg.wxpay.apiV3Key),
+      hasCertSerial: Boolean(cfg.wxpay.certSerial),
+      hasPrivateKey: Boolean(cfg.wxpay.privateKey || cfg.wxpay.privateKeyPath),
+      notifyUrl: cfg.wxpay.notifyUrl || null,
+    },
+    virtualPayment: {
+      mode: cfg.virtualPayment.mode,
+      hasOfferId: Boolean(cfg.virtualPayment.offerId),
+      hasAppKey: Boolean(cfg.virtualPayment.appKey),
+      env: cfg.virtualPayment.env,
+      hasProductId: Boolean(cfg.virtualPayment.productId),
+      goodsPrice: cfg.virtualPayment.goodsPrice,
+    },
   }));
 
   app.post<{ Body: DebugBody }>('/debug/ocr-raw', async (req, reply) => {

@@ -14,15 +14,22 @@ interface IncomingChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   fileIDs?: string[];
+  ocrText?: string;
 }
 
 interface ChatBody {
   messages: IncomingChatMessage[];
   stream?: boolean;
+  guest?: boolean;
 }
 
 function ndjson(obj: unknown): string {
   return JSON.stringify(obj) + '\n';
+}
+
+function isTimeoutError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string };
+  return e?.code === 'ESOCKETTIMEDOUT' || (e?.message ?? '').toLowerCase().includes('timeout');
 }
 
 async function buildLLMMessages(
@@ -30,7 +37,10 @@ async function buildLLMMessages(
   msgs: IncomingChatMessage[],
   openid: string,
   log: { info: (...args: unknown[]) => void; error: (...args: unknown[]) => void },
-): Promise<{ ok: true; messages: ChatMessage[] } | { ok: false; code: string; message: string }> {
+): Promise<
+  | { ok: true; messages: ChatMessage[]; lastUserOcr?: string }
+  | { ok: false; code: string; message: string }
+> {
   const t0 = Date.now();
   log.info({ openid: openid.slice(0, 8), msgCount: msgs.length }, '[chat] build start');
 
@@ -43,9 +53,11 @@ async function buildLLMMessages(
   }
 
   // 处理图片 → base64 → 内容安全 → 拼进 message content
+  // 历史消息若已带 ocrText 则直接复用，不重复 OCR；只有当前轮新上传的 fileIDs 才会触发 OCR。
   const out: ChatMessage[] = [{ role: 'system', content: SYSTEM_PROMPT }];
+  let lastUserOcr: string | undefined;
   for (const m of msgs) {
-    if (m.fileIDs && m.fileIDs.length > 0 && m.role === 'user') {
+    if (m.role === 'user' && m.fileIDs && m.fileIDs.length > 0 && !m.ocrText) {
       const imageBlocks: string[] = [];
       let idx = 0;
       for (const fid of m.fileIDs.slice(0, 5)) {
@@ -71,20 +83,28 @@ async function buildLLMMessages(
           imageBlocks.push(`[图片${idx}：处理失败]`);
         }
       }
-      const combined = m.content + (imageBlocks.length ? '\n\n' + imageBlocks.join('\n\n') : '');
+      const ocrText = imageBlocks.length ? imageBlocks.join('\n\n') : '';
+      if (ocrText) lastUserOcr = ocrText;
+      const combined = m.content + (ocrText ? '\n\n' + ocrText : '');
       out.push({ role: 'user', content: combined });
+    } else if (m.role === 'user' && m.ocrText) {
+      // 历史消息：用前端持久化的 OCR 文本，免重复 OCR
+      out.push({ role: 'user', content: m.content + '\n\n' + m.ocrText });
     } else {
       out.push({ role: m.role, content: m.content });
     }
   }
   log.info({ totalMs: Date.now() - t0 }, '[chat] build done');
-  return { ok: true, messages: out };
+  return { ok: true, messages: out, lastUserOcr };
 }
 
 async function streamingHandler(
   reply: FastifyReply,
   llm: LLMProvider,
-  messages: ChatMessage[],
+  buildMessages: () => Promise<
+    | { ok: true; messages: ChatMessage[]; lastUserOcr?: string }
+    | { ok: false; code: string; message: string }
+  >,
   cfg: AppConfig,
   openid: string,
   beforeCommit: () => Promise<number>,
@@ -108,6 +128,21 @@ async function streamingHandler(
       return false;
     }
   };
+
+  safeWrite(ndjson({ type: 'ping' }));
+
+  const built = await buildMessages();
+  if (!built.ok) {
+    safeWrite(ndjson({ type: 'error', code: built.code, message: built.message }));
+    reply.raw.end();
+    return;
+  }
+  const messages = built.messages;
+  // 把当前轮 OCR 文本回吐前端，让前端持久化到 userMsg，下一轮即可免重 OCR。
+  if (built.lastUserOcr) {
+    safeWrite(ndjson({ type: 'ocr', text: built.lastUserOcr }));
+  }
+
   const flushPending = (force: boolean) => {
     if (!pending) return;
     let cutAt = pending.lastIndexOf('\n');
@@ -172,44 +207,67 @@ export const chatRoutes =
         return reply.code(400).send({ error: 'INVALID_BODY', message: 'messages required' });
       }
 
-      const user = await getOrCreateUser(req.openid, req.unionid);
-      const isPaid = !!(user.paid_until && user.paid_until.getTime() > Date.now());
+      const isGuest = body.guest === true;
+      const user = isGuest ? null : await getOrCreateUser(req.openid, req.unionid);
+      const isPaid = !!(user?.paid_until && user.paid_until.getTime() > Date.now());
       const limit = isPaid ? cfg.dailyLimit.paid : cfg.dailyLimit.free;
 
       const date = todayBeijing();
-      const used = await getUsage(req.openid, date);
-      const bonusAvail = (user.bonus_balance ?? 0) > 0;
-      if (!bonusAvail && used >= limit) {
-        return reply.code(429).send({
-          error: 'RATE_LIMIT',
-          message: `Daily quota ${limit} exceeded`,
-          remainingUses: 0,
-        });
+      const bonusAvail = (user?.bonus_balance ?? 0) > 0;
+      if (!isGuest) {
+        const used = await getUsage(req.openid, date);
+        if (!bonusAvail && used >= limit) {
+          return reply.code(429).send({
+            error: 'RATE_LIMIT',
+            message: `Daily quota ${limit} exceeded`,
+            remainingUses: 0,
+          });
+        }
       }
 
-      req.log.info({ openid: req.openid.slice(0, 8), stream: body.stream !== false }, '[chat] req in');
-      const built = await buildLLMMessages(cfg, body.messages, req.openid, req.log);
-      if (!built.ok) {
-        return reply.code(400).send({ error: built.code, message: built.message });
-      }
-
-      // commit returns the post-commit remainingUses (today's daily remaining only;
-      // bonus_balance is rendered separately on the client via /auth/me).
+      req.log.info({ openid: req.openid.slice(0, 8), stream: body.stream !== false, guest: isGuest }, '[chat] req in');
+      // Use today's quota first. Invite rewards are a one-time extra balance and
+      // should only be consumed after the daily free/paid quota is exhausted.
       const commit = async (): Promise<number> => {
-        let bonusConsumed = false;
-        if (bonusAvail) bonusConsumed = await decrementBonusAtomic(req.openid);
-        if (!bonusConsumed) await incrementUsage(req.openid, date);
+        if (isGuest) return -1;
+        const usedNow = await getUsage(req.openid, date);
+        if (usedNow < limit) {
+          await incrementUsage(req.openid, date);
+        } else if (bonusAvail) {
+          await decrementBonusAtomic(req.openid);
+        }
         await incrementTotalUses(req.openid);
         const usedAfter = await getUsage(req.openid, date);
         return Math.max(0, limit - usedAfter);
       };
 
       if (body.stream === false) {
+        const built = await buildLLMMessages(cfg, body.messages, req.openid, req.log);
+        if (!built.ok) {
+          return reply.code(400).send({ error: built.code, message: built.message });
+        }
         let content: string;
+        const tLLM = Date.now();
         try {
           content = await llm.chat(built.messages);
+          req.log.info({ ms: Date.now() - tLLM, chars: content.length }, '[chat] nonstream llm done');
         } catch (err) {
-          req.log.error({ err, openid: req.openid.slice(0, 8) }, 'LLM failed');
+          if (llm.chatStream && isTimeoutError(err)) {
+            req.log.warn({ err, openid: req.openid.slice(0, 8) }, 'LLM nonstream timed out, retrying with stream');
+            try {
+              content = await llm.chatStream(built.messages, () => undefined);
+              req.log.info({ ms: Date.now() - tLLM, chars: content.length }, '[chat] stream fallback llm done');
+            } catch (fallbackErr) {
+              req.log.error({ err: fallbackErr, openid: req.openid.slice(0, 8) }, 'LLM stream fallback failed');
+              return reply.code(500).send({ error: 'LLM_FAIL', message: 'AI 响应失败，请重试' });
+            }
+          } else {
+            req.log.error({ err, openid: req.openid.slice(0, 8) }, 'LLM failed');
+            return reply.code(500).send({ error: 'LLM_FAIL', message: 'AI 响应失败，请重试' });
+          }
+        }
+        if (!content) {
+          req.log.error({ openid: req.openid.slice(0, 8) }, 'LLM returned empty content');
           return reply.code(500).send({ error: 'LLM_FAIL', message: 'AI 响应失败，请重试' });
         }
         const safe = await checkText(cfg.cloudbaseEnvId, req.openid, content);
@@ -218,10 +276,20 @@ export const chatRoutes =
         }
         content = stripMarkdown(content);
         const remainingUses = await commit();
-        return { content, remainingUses };
+        req.log.info({ chars: content.length, remainingUses }, '[chat] nonstream response ready');
+        return built.lastUserOcr
+          ? { content, remainingUses, ocrText: built.lastUserOcr }
+          : { content, remainingUses };
       }
 
       // stream=true 默认走流式
-      await streamingHandler(reply, llm, built.messages, cfg, req.openid, commit);
+      await streamingHandler(
+        reply,
+        llm,
+        () => buildLLMMessages(cfg, body.messages, req.openid, req.log),
+        cfg,
+        req.openid,
+        commit,
+      );
     });
   };

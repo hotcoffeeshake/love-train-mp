@@ -4,9 +4,10 @@ import { getDb } from './mongo.js';
 const COLLECTION = 'subscriptions';
 
 export type RebateStatus = 'none' | 'pending' | 'paid';
-export type SubscriptionSource = 'wxpay' | 'mock' | 'manual';
+export type SubscriptionSource = 'wxpay' | 'virtual' | 'mock' | 'manual';
 
 export interface SubscriptionInput {
+  _id?: string;
   openid: string;
   inviter_openid?: string;
   amount: number;            // cents
@@ -44,8 +45,9 @@ function fromDb(doc: Record<string, unknown>): SubscriptionDoc {
 }
 
 export async function insertSubscription(input: SubscriptionInput): Promise<string> {
-  const _id = randomUUID();
-  await getDb().collection(COLLECTION).insertOne({ _id, ...input });
+  const _id = input._id ?? randomUUID();
+  const { _id: _ignored, ...doc } = input;
+  await getDb().collection(COLLECTION).insertOne({ _id, ...doc });
   return _id;
 }
 
@@ -53,6 +55,13 @@ export async function findSubscriptionByTransactionId(
   transaction_id: string,
 ): Promise<SubscriptionDoc | null> {
   const doc = await getDb().collection(COLLECTION).findOne({ transaction_id });
+  return doc ? fromDb(doc) : null;
+}
+
+export async function findSubscriptionByOutTradeNo(
+  out_trade_no: string,
+): Promise<SubscriptionDoc | null> {
+  const doc = await getDb().collection(COLLECTION).findOne({ out_trade_no });
   return doc ? fromDb(doc) : null;
 }
 
@@ -67,6 +76,17 @@ export async function listAllSubscriptions(limit: number, offset: number): Promi
   const docs = await getDb()
     .collection(COLLECTION)
     .find({}, { limit, offset, sortBy: 'paid_at', sortDir: 'desc' });
+  return docs.map(fromDb);
+}
+
+export async function listSubscriptionsByOpenid(
+  openid: string,
+  limit: number,
+  offset: number,
+): Promise<SubscriptionDoc[]> {
+  const docs = await getDb()
+    .collection(COLLECTION)
+    .find({ openid }, { limit, offset, sortBy: 'paid_at', sortDir: 'desc' });
   return docs.map(fromDb);
 }
 

@@ -12,3 +12,6 @@ coverage/
 # miniprogram
 miniprogram/node_modules/
 miniprogram/project.private.config.json
+
+# CloudBase downloaded private keys
+container/private/

@@ -9,6 +9,8 @@ export interface CloudBaseConfig {
   model: string;
   secretId?: string;
   secretKey?: string;
+  sessionToken?: string;
+  timeoutMs?: number;
 }
 
 export class CloudBaseProvider implements LLMProvider {
@@ -19,10 +21,14 @@ export class CloudBaseProvider implements LLMProvider {
 
   constructor(private readonly cfg: CloudBaseConfig) {
     this.name = `cloudbase-${cfg.providerName === 'hunyuan-exp' ? 'hunyuan' : cfg.providerName}`;
-    const init: Parameters<typeof tcb.init>[0] = { env: cfg.envId };
+    const init: Parameters<typeof tcb.init>[0] = {
+      env: cfg.envId,
+      timeout: cfg.timeoutMs ?? 90000,
+    };
     if (cfg.secretId && cfg.secretKey) {
       init.secretId = cfg.secretId;
       init.secretKey = cfg.secretKey;
+      if (cfg.sessionToken) init.sessionToken = cfg.sessionToken;
     }
     const app = tcb.init(init);
     const ai = app.ai();

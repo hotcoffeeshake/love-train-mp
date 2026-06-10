@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { AppConfig } from '../config.js';
 import { getRemaining } from '../db/quota.js';
 import { getOrCreateUser, updateProfile } from '../db/users.js';
+import { codeToSession } from '../services/wechat-session.js';
 import { todayBeijing } from '../utils/date.js';
 
 export const authRoutes =
@@ -40,5 +41,41 @@ export const authRoutes =
     app.post<{ Body: { nickname?: string; avatarUrl?: string } }>('/user/profile', async (req) => {
       await updateProfile(req.openid, req.body ?? {});
       return { ok: true };
+    });
+
+    app.post<{ Body: { code?: string } }>('/auth/jscode2session', async (req, reply) => {
+      const code = req.body?.code?.trim();
+      if (!code) {
+        return reply.code(400).send({ error: 'MISSING_CODE', message: 'code is required' });
+      }
+      if (!cfg.wxAppId || !cfg.wxAppSecret) {
+        return reply.code(500).send({
+          error: 'WX_CREDENTIALS_NOT_CONFIGURED',
+          message: 'WX_APPID / WX_APPSECRET env vars not set on server',
+        });
+      }
+      let wxResp: { openid: string; unionid?: string };
+      try {
+        wxResp = await codeToSession(cfg, code);
+      } catch (e) {
+        if ((e as Error & { code?: string }).code === 'WX_LOGIN_FAILED') {
+          return reply.code(401).send({
+            error: 'WX_LOGIN_FAILED',
+            message: (e as Error).message,
+            errcode: (e as Error & { errcode?: number }).errcode,
+          });
+        }
+        if ((e as Error).message === 'WX_CREDENTIALS_NOT_CONFIGURED') {
+          return reply.code(500).send({
+            error: 'WX_CREDENTIALS_NOT_CONFIGURED',
+            message: 'WX_APPID / WX_APPSECRET env vars not set on server',
+          });
+        }
+        return reply.code(502).send({
+          error: 'WX_API_UNREACHABLE',
+          message: (e as Error).message ?? 'failed to reach api.weixin.qq.com',
+        });
+      }
+      return { openid: wxResp.openid, unionid: wxResp.unionid ?? null };
     });
   };

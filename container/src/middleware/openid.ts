@@ -15,7 +15,12 @@ const plugin: FastifyPluginAsync = async (app) => {
   app.decorateRequest('appid', undefined);
 
   app.addHook('onRequest', async (req, reply) => {
-    if (req.url === '/health') {
+    if (
+      req.url === '/health' ||
+      req.url === '/auth/jscode2session' ||
+      req.url === '/wxpay/notify' ||
+      req.url.startsWith('/payment/virtual-notify')
+    ) {
       return;
     }
 

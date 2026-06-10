@@ -68,4 +68,18 @@ describe('recordPayment', () => {
     const subs = await listAllSubscriptions(50, 0);
     expect(subs).toHaveLength(1);
   });
+
+  it('is idempotent on concurrent settlement for the same out_trade_no', async () => {
+    await getOrCreateUser('oA');
+
+    const [first, second] = await Promise.all([
+      recordPayment(cfg, { openid: 'oA', amount: 2000, transaction_id: 'tx-1', out_trade_no: 'L1', source: 'virtual' }),
+      recordPayment(cfg, { openid: 'oA', amount: 2000, transaction_id: 'tx-2', out_trade_no: 'L1', source: 'virtual' }),
+    ]);
+
+    const subs = await listAllSubscriptions(50, 0);
+    expect(subs).toHaveLength(1);
+    expect(new Set([first.subscription_id, second.subscription_id])).toEqual(new Set(['L1']));
+    expect([first.duplicate, second.duplicate].filter(Boolean)).toHaveLength(1);
+  });
 });

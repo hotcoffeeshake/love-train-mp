@@ -17,7 +17,9 @@ function getClient(cfg: AppConfig): WxPay {
   if (cfg.wxpay.mode !== 'real') {
     throw new Error('wxpay client unavailable in mock mode');
   }
-  const privateKey = readFileSync(cfg.wxpay.privateKeyPath);
+  const privateKey = cfg.wxpay.privateKey
+    ? Buffer.from(cfg.wxpay.privateKey)
+    : readFileSync(cfg.wxpay.privateKeyPath);
   // The SDK requires a publicKey Buffer in its constructor; for v3 notifications
   // platform certs are fetched lazily via get_certificates(apiSecret) when needed
   // for outbound API verification. We pass an empty buffer placeholder here —
@@ -74,6 +76,14 @@ export async function createWxpayPrepayOrder(
 interface DecryptedNotify {
   out_trade_no: string;
   transaction_id: string;
+  openid: string;
+  amount_cents: number;
+}
+
+export interface WxpayOrder {
+  out_trade_no: string;
+  transaction_id: string;
+  trade_state: string;
   openid: string;
   amount_cents: number;
 }
@@ -141,6 +151,44 @@ export async function verifyAndDecryptNotify(
   return {
     out_trade_no: data.out_trade_no,
     transaction_id: data.transaction_id,
+    openid,
+    amount_cents,
+  };
+}
+
+export async function queryWxpayOrder(
+  cfg: AppConfig,
+  out_trade_no: string,
+): Promise<WxpayOrder> {
+  const client = getClient(cfg);
+  const result = await client.query({ out_trade_no });
+  if (result.status !== 200 || !result.data) {
+    throw new Error(
+      `wxpay query failed: status=${result.status} error=${JSON.stringify(
+        result.error ?? result.errRaw ?? null,
+      )}`,
+    );
+  }
+
+  const data = result.data as {
+    out_trade_no: string;
+    transaction_id?: string;
+    trade_state: string;
+    payer?: { openid: string };
+    amount?: { total?: number; payer_total?: number };
+  };
+  const openid = data.payer?.openid;
+  if (!openid) throw new Error('query result missing payer.openid');
+
+  const amount_cents = data.amount?.payer_total ?? data.amount?.total;
+  if (typeof amount_cents !== 'number') {
+    throw new Error('query result missing amount');
+  }
+
+  return {
+    out_trade_no: data.out_trade_no,
+    transaction_id: data.transaction_id ?? data.out_trade_no,
+    trade_state: data.trade_state,
     openid,
     amount_cents,
   };
